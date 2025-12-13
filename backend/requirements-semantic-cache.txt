@@ -1,0 +1,14 @@
+# Additional dependencies for Semantic Caching
+# Install these alongside your existing requirements:
+# pip install -r requirements-semantic-cache.txt
+
+# Redis with vector search support
+redis==5.2.1
+
+# Sentence transformers for embedding generation
+sentence-transformers==3.3.1
+
+# These are typically included with sentence-transformers, but listing for clarity:
+# torch (will be installed by sentence-transformers)
+# transformers (will be installed by sentence-transformers)
+# scikit-learn (will be installed by sentence-transformers)

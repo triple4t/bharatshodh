@@ -1,0 +1,352 @@
+/* Force Tailwind prose classes to use theme chat bubble text color */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Full-height page + matching background */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--theme-surface-bg, #020617);
+  /* dark theme base */
+  color: var(--theme-text, #e5e7eb);
+}
+
+
+.prose,
+.prose-invert {
+  color: var(--theme-chatBubbleText, #f3f3f3) !important;
+}
+
+
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* Hide horizontal scrollbar but keep vertical visible */
+::-webkit-scrollbar:horizontal {
+  height: 0px;
+  background: transparent;
+}
+
+::-webkit-scrollbar:vertical {
+  padding-left: 10%;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--theme-background, #181818);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-chatBubble, #e0e0e0);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-chatBubbleText, #181818);
+}
+
+/* Markdown content styling */
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  color: var(--theme-chatBubbleText, #f3f3f3) !important;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-content h1 {
+  font-size: 1.5em;
+}
+
+.markdown-content h2 {
+  font-size: 1.25em;
+}
+
+.markdown-content h3 {
+  font-size: 1.125em;
+}
+
+.markdown-content p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+  color: var(--theme-chatBubbleText, #f3f3f3) !important;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.markdown-content li {
+  margin-bottom: 0.5em;
+  color: var(--theme-chatBubbleText, #f3f3f3) !important;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #7ab7ff;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #afafaf;
+}
+
+.markdown-content a {
+  color: #7ab7ff;
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+  color: var(--theme-chatBubbleText, #fff) !important;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #ffffff26;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: #ffffff0d;
+  font-weight: 600;
+}
+
+/* Animation for loading dots */
+@keyframes pulse {
+
+  0%,
+  70%,
+  100% {
+    opacity: 0.4;
+  }
+
+  35% {
+    opacity: 1;
+  }
+}
+
+/* Responsive design improvements */
+@media (max-width: 1024px) {
+  .markdown-content {
+    font-size: 15px;
+  }
+
+  .markdown-content h1 {
+    font-size: 1.375em;
+  }
+
+  .markdown-content h2 {
+    font-size: 1.175em;
+  }
+
+  .markdown-content h3 {
+    font-size: 1.0625em;
+  }
+}
+
+@media (max-width: 768px) {
+  .markdown-content {
+    font-size: 14px;
+  }
+
+  .markdown-content h1 {
+    font-size: 1.25em;
+  }
+
+  .markdown-content h2 {
+    font-size: 1.125em;
+  }
+
+  .markdown-content h3 {
+    font-size: 1em;
+  }
+
+  .markdown-content pre {
+    font-size: 12px;
+    padding: 12px;
+    overflow-x: auto;
+  }
+
+  .markdown-content table {
+    font-size: 13px;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .markdown-content {
+    font-size: 13px;
+  }
+
+  .markdown-content h1 {
+    font-size: 1.125em;
+  }
+
+  .markdown-content h2 {
+    font-size: 1em;
+  }
+
+  .markdown-content h3 {
+    font-size: 0.9375em;
+  }
+
+  .markdown-content pre {
+    font-size: 11px;
+    padding: 10px;
+  }
+
+  .markdown-content table {
+    font-size: 12px;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    padding: 4px 6px;
+  }
+}
+
+/* Focus styles for accessibility */
+/* button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #7ab7ff;
+  outline-offset: 2px;
+} */
+
+button:focus-visible {
+  outline: 2px solid #7ab7ff;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+
+  /* Improve touch targets */
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    min-height: 28px;
+    min-width: 28px;
+  }
+
+  /* Prevent zoom on input focus */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Optimize scrolling */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reduce motion for better performance */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Responsive container utilities */
+.responsive-container {
+  width: 100%;
+  max-width: 100%;
+  padding-left: clamp(16px, 4vw, 32px);
+  padding-right: clamp(16px, 4vw, 32px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Responsive text utilities */
+.text-responsive-xs {
+  font-size: clamp(12px, 2.5vw, 14px);
+}
+
+.text-responsive-sm {
+  font-size: clamp(13px, 2.8vw, 15px);
+}
+
+.text-responsive-base {
+  font-size: clamp(14px, 3vw, 16px);
+}
+
+.text-responsive-lg {
+  font-size: clamp(16px, 3.5vw, 18px);
+}
+
+.text-responsive-xl {
+  font-size: clamp(18px, 4vw, 20px);
+}
+
+.text-responsive-2xl {
+  font-size: clamp(20px, 5vw, 24px);
+}
+
+.text-responsive-3xl {
+  font-size: clamp(24px, 6vw, 32px);
+}
+
+/* Responsive spacing utilities */
+.spacing-responsive-xs {
+  padding: clamp(4px, 1vw, 8px);
+}
+
+.spacing-responsive-sm {
+  padding: clamp(8px, 2vw, 12px);
+}
+
+.spacing-responsive-md {
+  padding: clamp(12px, 3vw, 16px);
+}
+
+.spacing-responsive-lg {
+  padding: clamp(16px, 4vw, 24px);
+}
+
+.spacing-responsive-xl {
+  padding: clamp(20px, 5vw, 32px);
+}
