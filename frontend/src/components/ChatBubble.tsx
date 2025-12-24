@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Copy, Volume2, User, VolumeOff, Link } from "lucide-react";
 import { Message } from "../types";
 import classNames from "classnames";
+import CitationCard from "./CitationCard";
 
 import LogoBlack from "../asset/img/bharat5.png";
 import LogoWhite from "../asset/img/bharat5.png";
@@ -510,6 +511,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                         >
                           {message.content}
                         </ReactMarkdown>
+
+                        {/* RAG Document Citations */}
+                        {!isUser && message.citations && message.citations.length > 0 && (
+                          <CitationCard citations={message.citations} />
+                        )}
 
                         {/* References */}
                         {!isUser &&

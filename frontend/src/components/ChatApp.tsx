@@ -178,7 +178,7 @@ function ChatApp() {
   }, []);
 
   const handleSendMessage = useCallback(
-    async (content: string, file?: File, useWebSearch?: boolean) => {
+    async (content: string, file?: File, useWebSearch?: boolean, useDocuments?: boolean) => {
       if (!content.trim() && !file) return;
 
       let chatId = currentChatId;
@@ -279,7 +279,8 @@ function ChatApp() {
             chatId,
             finalContent,
             content,
-            formattedResults
+            formattedResults,
+            useDocuments  // NEW: Pass document toggle state
           );
         }
 

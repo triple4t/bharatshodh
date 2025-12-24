@@ -61,6 +61,43 @@ export interface UserPublic {
   created_at: string;
 }
 
+/** Document RAG Types **/
+export interface DocumentInfo {
+  id: string;
+  filename: string;
+  upload_date: string;
+  uploaded_by: string;
+  doc_type: 'admin' | 'user';
+  file_size: number;
+  chunk_count: number;
+}
+
+export interface DocumentUploadResponse {
+  message: string;
+  document: DocumentInfo;
+}
+
+export interface DocumentListResponse {
+  documents: DocumentInfo[];
+}
+
+export interface Citation {
+  doc_id: string;
+  filename: string;
+  chunk_text: string;
+  page_number?: number;
+  relevance_score: number;
+  chunk_index: number;
+}
+
+/** Chat / Messages **/
+export interface Message {
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp?: string;
+  citations?: Citation[];  // NEW: Citations for RAG responses
+}
+
 /* =========================
  * Simple token manager
  * ========================= */
@@ -233,6 +270,7 @@ class ApiService {
     content: string,
     originalContent?: string,
     webSearchResults?: string | null,
+    useDocuments?: boolean,
   ): Promise<ChatResponse> {
     return this.request<ChatResponse>(`/chat/${chatId}/message`, {
       method: 'POST',
@@ -240,6 +278,7 @@ class ApiService {
         content,
         original_content: originalContent ?? content,
         web_search_results: webSearchResults ?? null,
+        use_documents: useDocuments ?? false,  // NEW: RAG toggle
       }),
     });
   }
@@ -353,6 +392,49 @@ class ApiService {
   //   // optionally revoke URL when done
   //   audio.onended = () => URL.revokeObjectURL(url);
   // }
+
+  /* ========== Document RAG ========== */
+
+  /** Upload user document for RAG */
+  async uploadUserDocument(file: File): Promise<DocumentUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getToken();
+    const res = await fetch(`${API_BASE_URL}/documents/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err?.detail || detail;
+      } catch {
+        // ignore
+      }
+      if (res.status === 401) setToken(null);
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  /** Get user's documents */
+  async getUserDocuments(): Promise<DocumentListResponse> {
+    return this.request<DocumentListResponse>('/documents');
+  }
+
+  /** Get admin documents (for user reference) */
+  async getAdminDocuments(): Promise<DocumentListResponse> {
+    return this.request<DocumentListResponse>('/documents/admin');
+  }
+
+  /** Delete user document */
+  async deleteUserDocument(docId: string): Promise<void> {
+    await this.request(`/documents/${docId}`, { method: 'DELETE' });
+  }
 
 }
 

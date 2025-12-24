@@ -20,10 +20,12 @@ from config import settings
 from database import connect_to_mongo, close_mongo_connection
 from models import (
     Chat, ChatCreate, ChatRename, ChatResponse, ChatListResponse,
-    ChatHistoryResponse, FileInfo, MessageCreate, SearchQuery, TTSRequest
+    ChatHistoryResponse, FileInfo, MessageCreate, SearchQuery, TTSRequest,
+    DocumentInfo, DocumentUploadResponse, Citation, Message
 )
 from services.chat_service import chat_service #generate_wave_bytes, stream_bytes_in_chunks, wav_to_mp3_stream
 from services.file_processor import file_processor
+from services.document_service import document_service
 from security import get_current_user
 from auth_router import router as auth_router
 from admin_router import router as admin_router
@@ -171,15 +173,54 @@ async def send_message(chat_id: str, message_data: MessageCreate, current=Depend
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found")
 
+        # RAG mode: Use hybrid search with citations if use_documents is enabled
+        rag_context = None
+        citations = []
+        if message_data.use_documents:
+            logger.info(f"RAG hybrid search enabled for query: '{message_data.content[:50]}...'")
+            # Use hybrid search instead of semantic-only search
+            search_results = await document_service.retrieve_relevant_chunks_hybrid(
+                query=message_data.content,
+                user_id=current["_id"],
+                use_admin_docs=True,
+                use_user_docs=True,
+                top_k=5
+            )
+            rag_context = search_results["context"]
+            citations = search_results["citations"]
+            
+            if citations:
+                logger.info(f"Hybrid search retrieved {len(citations)} chunks with citations")
+            else:
+                logger.info("No relevant documents found for RAG query")
+
+        # Combine RAG context with message content if available
+        content_for_ai = message_data.content
+        if rag_context:
+            content_for_ai = f"{rag_context}\n\nUser Question: {message_data.content}\n\nPlease answer based on the documents provided above."
+
         user_msg, ai_msg = await chat_service.process_message(
             owner_id=current["_id"],
             chat_id=chat_id,
-            content=message_data.content,
-            original_content=message_data.original_content,
+            content=content_for_ai,
+            original_content=message_data.original_content or message_data.content,
             web_search_results=message_data.web_search_results,
             image_path=None
         )
-        return ChatResponse(chat_id=chat_id, message=user_msg, response=ai_msg)
+
+        # Convert ai_msg to dict and add citations
+        ai_msg_dict = ai_msg.model_dump() if hasattr(ai_msg, 'model_dump') else dict(ai_msg)
+        if citations:
+            ai_msg_dict["citations"] = citations
+
+        # Convert user_msg to dict as well for consistency
+        user_msg_dict = user_msg.model_dump() if hasattr(user_msg, 'model_dump') else dict(user_msg)
+
+        return ChatResponse(
+            chat_id=chat_id,
+            message=Message(**user_msg_dict),
+            response=Message(**ai_msg_dict)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -271,7 +312,8 @@ async def upload_file(
         raise HTTPException(status_code=500, detail="Failed to process file upload")
     
 
-# --------------TTS (Text-to-Speech) --------------
+
+# ----------TTS (Text-to-Speech) --------------
 
 
 @app.post("/api/tts")
@@ -337,3 +379,98 @@ async def clear_cache(current=Depends(get_current_user)):
         logger.error(f"Error clearing cache: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
+
+# ---------- Document RAG Endpoints (User) ----------
+
+@app.post("/api/documents/upload", response_model=DocumentUploadResponse)
+async def upload_user_document(
+    file: UploadFile = File(...),
+    current=Depends(get_current_user)
+):
+    """Upload a document for RAG (user's personal document)"""
+    try:
+        # Validate file type
+        allowed_extensions = [".pdf", ".docx", ".txt"]
+        file_ext = os.path.splitext(file.filename or "")[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+            )
+
+        # Validate file size (25MB max)
+        max_size = getattr(settings, "max_file_size", 25 * 1024 * 1024)
+        file_size = getattr(file, "size", None)
+        if file_size and file_size > max_size:
+            raise HTTPException(status_code=413, detail="File too large (max 25MB)")
+
+        # Save file temporarily
+        file_id = str(uuid.uuid4())
+        temp_path = os.path.join(UPLOAD_DIR, f"temp_{file_id}{file_ext}")
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Upload and process document
+        doc_info = await document_service.upload_document(
+            file_path=temp_path,
+            filename=file.filename,
+            uploaded_by=current["_id"],
+            doc_type="user"
+        )
+
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        return DocumentUploadResponse(
+            message="Document uploaded and processed successfully",
+            document=DocumentInfo(**doc_info)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading user document: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
+
+
+@app.get("/api/documents")
+async def get_user_documents(current=Depends(get_current_user)):
+    """Get user's uploaded documents"""
+    try:
+        docs = await document_service.get_user_documents(current["_id"])
+        return {"documents": docs}
+    except Exception as e:
+        logger.error(f"Error fetching user documents: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch documents")
+
+
+@app.get("/api/documents/admin")
+async def get_admin_documents_for_user(current=Depends(get_current_user)):
+    """Get all admin documents (for user reference)"""
+    try:
+        docs = await document_service.get_admin_documents()
+        return {"documents": docs}
+    except Exception as e:
+        logger.error(f"Error fetching admin documents: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch admin documents")
+
+
+@app.delete("/api/documents/{doc_id}")
+async def delete_user_document(doc_id: str, current=Depends(get_current_user)):
+    """Delete user's document"""
+    try:
+        deleted = await document_service.delete_document(
+            doc_id=doc_id,
+            user_id=current["_id"],
+            is_admin=False
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Document not found or access denied")
+
+        return {"message": "Document deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")

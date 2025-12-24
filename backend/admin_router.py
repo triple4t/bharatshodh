@@ -4,14 +4,17 @@ Admin authentication and management router
 from datetime import datetime, timedelta
 import os
 import uuid
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Header
+import shutil
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Header, UploadFile, File
 from models import (
     AdminRegister, AdminLogin, AdminPublic, AdminTokenResponse,
-    AdminStats, UserDetailResponse
+    AdminStats, UserDetailResponse, DocumentInfo, DocumentUploadResponse
 )
 from services.emailer import send_approval_email, send_rejection_email
+from services.document_service import document_service
 from database import get_database
 from security import hash_password, verify_password, create_access_token, hash_value
+from config import settings
 import jwt
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -381,3 +384,99 @@ async def delete_admin(admin_id: str, authorization: str = Header(None, alias="A
         raise HTTPException(status_code=404, detail="Admin not found")
     
     return {"msg": "Admin has been deleted"}
+
+
+# ---------- Admin Document Management ----------
+
+@router.post("/documents/upload", response_model=DocumentUploadResponse)
+async def upload_admin_document(
+    file: UploadFile = File(...),
+    authorization: str = Header(None, alias="Authorization")
+):
+    """Upload a document as admin (accessible to all users)"""
+    admin_id = await get_current_admin(authorization)
+    
+    try:
+        # Validate file type
+        allowed_extensions = [".pdf", ".docx", ".txt"]
+        file_ext = os.path.splitext(file.filename or "")[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+            )
+
+        # Validate file size (25MB max)
+        max_size = getattr(settings, "max_file_size", 25 * 1024 * 1024)
+        file_size = getattr(file, "size", None)
+        if file_size and file_size > max_size:
+            raise HTTPException(status_code=413, detail="File too large (max 25MB)")
+
+        # Save file temporarily
+        upload_dir = getattr(settings, "upload_dir", "uploads")
+        temp_id = str(uuid.uuid4())
+        temp_path = os.path.join(upload_dir, f"temp_{temp_id}{file_ext}")
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Upload and process document
+        doc_info = await document_service.upload_document(
+            file_path=temp_path,
+            filename=file.filename,
+            uploaded_by=admin_id,
+            doc_type="admin"
+        )
+
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        return DocumentUploadResponse(
+            message="Admin document uploaded successfully",
+            document=DocumentInfo(**doc_info)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.error(f"Error uploading admin document: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
+
+
+@router.get("/documents")
+async def get_admin_documents_list(authorization: str = Header(None, alias="Authorization")):
+    """Get all admin-uploaded documents"""
+    admin_id = await get_current_admin(authorization)
+    
+    try:
+        docs = await document_service.get_admin_documents()
+        return {"documents": docs}
+    except Exception as e:
+        import logging
+        logging.error(f"Error fetching admin documents: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch documents")
+
+
+@router.delete("/documents/{doc_id}")
+async def delete_admin_document(doc_id: str, authorization: str = Header(None, alias="Authorization")):
+    """Delete an admin document"""
+    admin_id = await get_current_admin(authorization)
+    
+    try:
+        deleted = await document_service.delete_document(
+            doc_id=doc_id,
+            user_id=admin_id,
+            is_admin=True
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        return {"msg": "Document deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.error(f"Error deleting admin document: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")

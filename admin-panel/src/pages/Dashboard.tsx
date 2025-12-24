@@ -17,6 +17,8 @@ import {
   Eye,
   Menu,
   X,
+  FileText,
+  Upload,
 } from "lucide-react";
 
 interface User {
@@ -39,6 +41,16 @@ interface Stats {
   total_admins: number;
 }
 
+interface Document {
+  id: string;
+  filename: string;
+  upload_date: string;
+  uploaded_by: string;
+  doc_type: string;
+  file_size: number;
+  chunk_count: number;
+}
+
 export default function Dashboard() {
   const { admin, logout } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -51,20 +63,27 @@ export default function Dashboard() {
   const [showUserDetail, setShowUserDetail] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  
+  // Document management state
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
 
   // Load data
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [statsRes, usersRes] = await Promise.all([
+        const [statsRes, usersRes, docsRes] = await Promise.all([
           adminApi.getStats(),
           adminApi.getAllUsers(),
+          adminApi.getDocuments(),
         ]);
 
         setStats(statsRes.data);
         setUsers(usersRes.data);
         setFilteredUsers(usersRes.data);
+        setDocuments(docsRes.data.documents || []);
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -151,6 +170,55 @@ export default function Dashboard() {
       console.error("Failed to delete user:", error);
     } finally {
       setIsActionLoading(false);
+    }
+  };
+
+  // Document handlers
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['.pdf', '.docx', '.txt'];
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedTypes.includes(fileExt)) {
+      alert('Only PDF, DOCX, and TXT files are allowed');
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    setUploadProgress('Uploading...');
+
+    try {
+      const response = await adminApi.uploadDocument(file);
+      setUploadProgress('Processing document...');
+      
+      // Add to documents list
+      setDocuments(prev => [response.data.document, ...prev]);
+      setUploadProgress('');
+      alert('Document uploaded successfully!');
+      
+      // Reset file input
+      e.target.value = '';
+    } catch (error: any) {
+      console.error('Failed to upload document:', error);
+      alert(error.response?.data?.detail || 'Failed to upload document');
+    } finally {
+      setIsUploadingDoc(false);
+      setUploadProgress('');
+    }
+  };
+
+  const handleDocumentDelete = async (docId: string) => {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+
+    try {
+      await adminApi.deleteDocument(docId);
+      setDocuments(prev => prev.filter(doc => doc.id !== docId));
+      alert('Document deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document');
     }
   };
 
@@ -430,6 +498,80 @@ export default function Dashboard() {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Documents Section */}
+        <div className="mt-8 bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Documents Management</h2>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  onChange={handleDocumentUpload}
+                  accept=".pdf,.docx,.txt"
+                  className="hidden"
+                  disabled={isUploadingDoc}
+                />
+                <div className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                  <Upload className="w-4 h-4" />
+                  {isUploadingDoc ? uploadProgress : 'Upload Document'}
+                </div>
+              </label>
+            </div>
+            <p className="text-sm text-slate-600">Upload documents (PDF, DOCX, TXT) for RAG-powered Q&A</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            {documents.length === 0 ? (
+              <div className="p-8 text-center text-slate-600">
+                <FileText className="w-12 h-12 mx-auto mb-2 text-slate-400" />
+                <p>No documents uploaded yet</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Filename</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Size</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Chunks</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Uploaded</th>
+                    <th className="px-6 py-3 text-right text-sm font-medium text-slate-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((doc) => (
+                    <tr key={doc.id} className="border-b border-slate-200 hover:bg-slate-50 transition">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-medium text-slate-900">{doc.filename}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {(doc.file_size / 1024).toFixed(2)} KB
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {doc.chunk_count} chunks
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {new Date(doc.upload_date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleDocumentDelete(doc.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Delete document"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}

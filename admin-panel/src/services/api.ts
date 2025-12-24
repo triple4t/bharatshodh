@@ -57,12 +57,23 @@ export const adminApi = {
     return apiClient.post(`/admin/users/${userId}/reject?${params.toString()}`)
   },
   deleteUser: (userId: string) => apiClient.delete(`/admin/users/${userId}`),
-  toggleUserStatus: (userId: string, newStatus: string) => 
+  toggleUserStatus: (userId: string, newStatus: string) =>
     apiClient.put(`/admin/users/${userId}/toggle-status?new_status=${newStatus}`),
 
   // Admins
   getAllAdmins: () => apiClient.post('/admin/admins'),
   deleteAdmin: (adminId: string) => apiClient.delete(`/admin/admins/${adminId}`),
+
+  // Documents
+  uploadDocument: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return apiClient.post('/admin/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  getDocuments: () => apiClient.get('/admin/documents'),
+  deleteDocument: (docId: string) => apiClient.delete(`/admin/documents/${docId}`),
 }
 
 export default apiClient

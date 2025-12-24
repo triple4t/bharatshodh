@@ -143,6 +143,7 @@ class MessageCreate(BaseModel):
     content: str
     original_content: Optional[str] = None
     web_search_results: Optional[str] = None
+    use_documents: bool = False  # NEW: Toggle for RAG mode
 
 class ChatResponse(BaseModel):
     chat_id: str
@@ -166,4 +167,29 @@ class TTSRequest(BaseModel):
     text: str
     voice_id: str = "en-IN-NeerjaIndicNeural"
     output_format: str = "audio-16khz-32kbitrate-mono-mp3"
+
+# ---------- Document RAG Models ----------
+
+class DocumentInfo(BaseModel):
+    id: str
+    filename: str
+    upload_date: datetime
+    uploaded_by: str  # admin_id or user_id
+    doc_type: str  # 'admin' or 'user'
+    file_size: int
+    chunk_count: int
+
+class DocumentUploadResponse(BaseModel):
+    message: str
+    document: DocumentInfo
+
+
+class Citation(BaseModel):
+    """Citation/reference for RAG responses"""
+    doc_id: str
+    filename: str
+    chunk_text: str
+    page_number: Optional[int] = None  # Future: extract page numbers
+    relevance_score: float
+    chunk_index: int
 
