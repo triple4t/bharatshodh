@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import uuid
 import shutil
+import logging
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Header, UploadFile, File
 from models import (
     AdminRegister, AdminLogin, AdminPublic, AdminTokenResponse,
@@ -18,6 +19,8 @@ from config import settings
 import jwt
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+logger = logging.getLogger(__name__)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
@@ -197,11 +200,21 @@ async def get_all_users(
     
     users = await db.users.find(query).to_list(None)
     
-    # Convert _id to string
+    # Convert _id to string and validate
     result = []
     for user in users:
-        user["_id"] = str(user["_id"])
-        result.append(UserDetailResponse(**user))
+        try:
+            user["_id"] = str(user["_id"])
+            # Ensure required fields have defaults
+            if "status" not in user:
+                user["status"] = "pending"
+            if "created_at" not in user:
+                user["created_at"] = datetime.utcnow()
+            result.append(UserDetailResponse(**user))
+        except Exception as e:
+            # Log the error but continue processing other users
+            logger.error(f"Error processing user {user.get('_id', 'unknown')}: {e}")
+            continue
     
     return result
 
