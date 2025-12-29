@@ -9,10 +9,19 @@ import React, {
 
 interface Admin {
   id: string;
+  _id?: string; // Backend may return _id instead of id
   username: string;
   email: string;
   is_super_admin: boolean;
   created_at: string;
+}
+
+// Normalize admin data - convert _id to id if needed
+function normalizeAdmin(adminData: any): Admin {
+  return {
+    ...adminData,
+    id: adminData.id || adminData._id,
+  };
 }
 
 interface AuthContextType {
@@ -38,9 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (storedToken && storedAdmin) {
       try {
+        const adminData = JSON.parse(storedAdmin);
+        const normalizedAdmin = normalizeAdmin(adminData);
         setToken(storedToken);
-        setAdmin(JSON.parse(storedAdmin));
+        setAdmin(normalizedAdmin);
       } catch (e) {
+        console.error("Error parsing stored admin data:", e);
         localStorage.removeItem("admin_token");
         localStorage.removeItem("admin_user");
       }
@@ -55,11 +67,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await adminApi.login(username, password);
       const { access_token, admin: adminData } = response.data;
 
+      // Normalize admin data - convert _id to id if needed
+      const normalizedAdmin = normalizeAdmin(adminData);
+
       setToken(access_token);
-      setAdmin(adminData);
+      setAdmin(normalizedAdmin);
 
       localStorage.setItem("admin_token", access_token);
-      localStorage.setItem("admin_user", JSON.stringify(adminData));
+      localStorage.setItem("admin_user", JSON.stringify(normalizedAdmin));
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
     } finally {
       setIsLoading(false);
     }
