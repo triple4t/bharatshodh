@@ -22,7 +22,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Don't redirect on 401 for login endpoint - let the login page handle the error
+    const isLoginEndpoint = error.config?.url?.includes('/admin/login');
+    
+    if (error.response?.status === 401 && !isLoginEndpoint) {
       localStorage.removeItem('admin_token')
       localStorage.removeItem('admin_user')
       window.location.href = '/login'
