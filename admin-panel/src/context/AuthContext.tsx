@@ -18,9 +18,20 @@ interface Admin {
 
 // Normalize admin data - convert _id to id if needed
 function normalizeAdmin(adminData: any): Admin {
+  if (!adminData) {
+    throw new Error("Admin data is null or undefined");
+  }
+  
+  // Handle both _id and id fields
+  const id = adminData.id || adminData._id;
+  
+  if (!id) {
+    console.warn("No id or _id found in admin data:", adminData);
+  }
+  
   return {
     ...adminData,
-    id: adminData.id || adminData._id,
+    id: id || "",
   };
 }
 
@@ -65,19 +76,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { adminApi } = await import("./../services/api");
       const response = await adminApi.login(username, password);
-      const { access_token, admin: adminData } = response.data;
+      
+      // Validate response structure
+      if (!response || !response.data) {
+        throw new Error("Invalid response from server");
+      }
+      
+      const responseData = response.data;
+      const access_token = responseData.access_token;
+      const adminData = responseData.admin;
+      
+      // Validate required fields
+      if (!access_token) {
+        throw new Error("Access token not found in response");
+      }
+      
+      if (!adminData) {
+        throw new Error("Admin data not found in response");
+      }
 
       // Normalize admin data - convert _id to id if needed
       const normalizedAdmin = normalizeAdmin(adminData);
+      
+      // Validate normalized admin has required fields
+      if (!normalizedAdmin.id && !normalizedAdmin._id) {
+        throw new Error("Admin ID not found in response");
+      }
 
       setToken(access_token);
       setAdmin(normalizedAdmin);
 
       localStorage.setItem("admin_token", access_token);
       localStorage.setItem("admin_user", JSON.stringify(normalizedAdmin));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
-      throw error;
+      // Provide better error message
+      const errorMessage = error?.response?.data?.detail || error?.message || "Login failed. Please try again.";
+      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }

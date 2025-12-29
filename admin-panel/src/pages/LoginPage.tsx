@@ -30,9 +30,11 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
-      // Remove navigate("/") from here - let useEffect handle it
+      // Navigation will happen via useEffect when isAuthenticated becomes true
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Login failed. Please try again.");
+      const errorMessage = err?.response?.data?.detail || err?.message || "Login failed. Please try again.";
+      setError(errorMessage);
+      console.error("Login failed:", err);
     }
   };
 
