@@ -121,6 +121,7 @@ class Message(BaseModel):
     file: Optional[FileInfo] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     owner_id: str  # REQUIRED now
+    citations: Optional[List['Citation']] = None  # NEW: RAG citations
 
 class Chat(BaseModel):
     id: str = Field(default_factory=lambda: "", alias="_id")
@@ -185,11 +186,13 @@ class DocumentUploadResponse(BaseModel):
 
 
 class Citation(BaseModel):
-    """Citation/reference for RAG responses"""
+    """Citation/reference for RAG responses with page and chapter info"""
     doc_id: str
     filename: str
     chunk_text: str
-    page_number: Optional[int] = None  # Future: extract page numbers
     relevance_score: float
     chunk_index: int
+    page_start: Optional[int] = None     # Page where chunk starts
+    page_end: Optional[int] = None       # Page where chunk ends (if multi-page)
+    chapter: Optional[str] = None        # Chapter/section title
 

@@ -120,7 +120,8 @@ class ChatService:
         original_content: Optional[str] = None,
         file_info: Optional[FileInfo] = None,
         web_search_results: Optional[str] = None,
-        image_path: Optional[str] = None
+        image_path: Optional[str] = None,
+        rag_context: Optional[str] = None  # NEW: RAG context
     ) -> Tuple[Message, Message]:
         # User message
         user_message = await self.add_message(
@@ -143,8 +144,8 @@ class ChatService:
         # Gather history
         messages = await self.get_chat_messages(owner_id, chat_id)
 
-        # Get AI response
-        ai_content = await ai_service.generate_response(messages, image_path)
+        # Get AI response - pass rag_context if provided
+        ai_content = await ai_service.generate_response(messages, image_path, rag_context=rag_context)
 
         # Save AI message
         ai_message = await self.add_message(

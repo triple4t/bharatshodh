@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 
 export interface Citation {
   doc_id: string;
@@ -8,6 +8,9 @@ export interface Citation {
   page_number?: number;
   relevance_score: number;
   chunk_index: number;
+  page_start?: number;
+  page_end?: number;
+  chapter?: string;
 }
 
 interface CitationCardProps {
@@ -24,6 +27,11 @@ export default function CitationCard({ citations }: CitationCardProps) {
   const toggleExpand = (index: number) => {
     setExpandedIndex(expandedIndex === index ? null : index);
   };
+  
+  console.log('='.repeat(80));
+  console.log('💳 CitationCard: Received', citations.length, 'citations');
+  console.log('💳 First citation in CitationCard:', citations[0]);
+  console.log('='.repeat(80));
 
   return (
     <div className="mt-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 border border-purple-200">
@@ -50,8 +58,27 @@ export default function CitationCard({ citations }: CitationCardProps) {
                   <div className="text-sm font-medium text-slate-800 truncate">
                     {citation.filename}
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {(citation.relevance_score * 100).toFixed(0)}% relevance
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-500 mt-0.5">
+                    <span>{(citation.relevance_score * 100).toFixed(0)}% relevance</span>
+                    
+                    {/* Page info */}
+                    {citation.page_start && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        Page {citation.page_start}
+                        {citation.page_end && citation.page_end !== citation.page_start 
+                          ? `-${citation.page_end}` 
+                          : ''}
+                      </span>
+                    )}
+                    
+                    {/* Chapter info */}
+                    {citation.chapter && (
+                      <span className="flex items-center gap-1 text-purple-600 font-medium">
+                        <BookOpen className="w-3 h-3" />
+                        {citation.chapter}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

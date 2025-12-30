@@ -284,6 +284,14 @@ function ChatApp() {
           );
         }
 
+        // DEBUG: Log raw API response
+        console.log('='.repeat(80));
+        console.log('🔍 RAW API RESPONSE:');
+        console.log('response object:', response);
+        console.log('response.response:', response.response);
+        console.log('response.response.citations:', response.response.citations);
+        console.log('='.repeat(80));
+
         let sources: WebSearchResult[] | undefined = undefined;
         if (formattedResults) {
           sources = parseWebSourcesFromContent(formattedResults);
@@ -296,7 +304,13 @@ function ChatApp() {
           timestamp: new Date(response.response.timestamp),
           ...(sources && { sources }),
           references: response.response.references,
+          citations: response.response.citations,  // NEW: Include RAG citations
         };
+        
+        // DEBUG: Log if citations are present
+        if (response.response.citations) {
+          console.log('✅ ChatApp: Received citations from API:', response.response.citations);
+        }
 
         setChats((prev) =>
           prev.map((chat) => {

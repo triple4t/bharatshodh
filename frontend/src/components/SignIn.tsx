@@ -437,7 +437,6 @@ export default function SignIn() {
                         background:
                           "color-mix(in srgb, var(--theme-iconColor) 10%, transparent)",
                         border: "1px solid var(--theme-iconColor)",
-                        borderRadius: "12px",
                       }}
                     >
                       <div

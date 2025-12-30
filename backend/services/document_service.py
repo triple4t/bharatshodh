@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
 import numpy as np
 from rank_bm25 import BM25Okapi
+import re  # For chapter detection
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
@@ -15,6 +16,46 @@ from database import get_database
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def detect_chapter(text: str) -> Optional[str]:
+    """
+    Detect chapter/section titles from text using pattern matching.
+    
+    Patterns recognized:
+    - "Chapter X: Title" or "Chapter X – Title"
+    - "Section X(X): Title" or "Section X.X Title"
+    - Standalone titles like "Entitlement", "Introduction", etc.
+    
+    Args:
+        text: Text to scan for chapter titles (usually first 1000 chars)
+    
+    Returns:
+        Chapter title if found, None otherwise
+    """
+    # Check first 1000 characters only (chapters usually appear early)
+    search_text = text[:1000]
+    
+    patterns = [
+        # "Chapter 5: Title" or "Chapter 5 – Title"
+        r'(?:Chapter|CHAPTER)\s+(\d+)[:\s–-]+([^\n]{3,100})',
+        # "Section 5(2): Title" or "Section 5.2 Title"
+        r'(?:Section|SECTION)\s+(\d+(?:\(\d+\)|\.\d+)?)[:\s–-]+([^\n]{3,100})',
+        # Standalone important titles (case-insensitive, must be on own line)
+        r'^((?:Entitlement|Introduction|Conclusion|Overview|Summary|Definitions)[s]?)\s*$',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, search_text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            # Return the full matched text, cleaned up
+            chapter_text = match.group(0).strip()
+            # Limit length
+            if len(chapter_text) > 150:
+                chapter_text = chapter_text[:147] + "..."
+            return chapter_text
+    
+    return None
 
 
 class DocumentService:
@@ -103,6 +144,37 @@ class DocumentService:
             logger.error(f"Error extracting text from {filename}: {e}")
             raise
 
+    async def _extract_pdf_with_metadata(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Extract text from PDF with page numbers and chapter detection.
+        
+        Returns:
+            List of dicts with: {'text': str, 'page': int, 'chapter': Optional[str]}
+        """
+        loader = PyPDFLoader(file_path)
+        documents = loader.load()
+        
+        pages_with_metadata = []
+        current_chapter = None
+        
+        for doc in documents:
+            page_num = doc.metadata.get('page', 0) + 1  # pages are 0-indexed, make 1-indexed
+            text = doc.page_content
+            
+            # Try to detect chapter from this page
+            detected_chapter = detect_chapter(text)
+            if detected_chapter:
+                current_chapter = detected_chapter
+                logger.info(f"Detected chapter on page {page_num}: {detected_chapter}")
+            
+            pages_with_metadata.append({
+                'text': text,
+                'page': page_num,
+                'chapter': current_chapter
+            })
+        
+        return pages_with_metadata
+
     async def upload_document(
         self,
         file_path: str,
@@ -135,9 +207,18 @@ class DocumentService:
             import shutil
             shutil.copy2(file_path, stored_path)
 
-            # Extract text
+            # Extract text (with metadata for PDFs)
             logger.info(f"Extracting text from {filename}...")
-            full_text = await self._extract_text_from_file(stored_path, filename)
+            ext = os.path.splitext(filename)[1].lower()
+            
+            # For PDFs, extract with page metadata
+            if ext == ".pdf":
+                pages_metadata = await self._extract_pdf_with_metadata(stored_path)
+                full_text = "\n\n".join(p['text'] for p in pages_metadata)
+            else:
+                # For non-PDFs, use regular extraction
+                full_text = await self._extract_text_from_file(stored_path, filename)
+                pages_metadata = None  # No page metadata for DOCX/TXT
 
             if not full_text or len(full_text.strip()) < 10:
                 raise ValueError("Document appears to be empty or unreadable")
@@ -147,17 +228,50 @@ class DocumentService:
             chunks = self.text_splitter.split_text(full_text)
             logger.info(f"Created {len(chunks)} chunks from {filename}")
 
-            # Generate embeddings for each chunk
+            # Generate embeddings for each chunk with page/chapter metadata
             logger.info(f"Generating embeddings for {len(chunks)} chunks...")
             chunk_data = []
+            
+            # Track position in full_text to map chunks to pages
+            chunk_position = 0
+            
             for idx, chunk_text in enumerate(chunks):
                 embedding = self._compute_embedding(chunk_text)
+                
+                # Find page and chapter for this chunk (for PDFs only)
+                page_start = None
+                page_end = None
+                chapter = None
+                
+                if pages_metadata and ext == ".pdf":
+                    # Find which page(s) this chunk belongs to
+                    char_count =0
+                    for page_info in pages_metadata:
+                        page_text_len = len(page_info['text'])
+                        
+                        # Check if chunk overlaps with this page
+                        if chunk_position < char_count + page_text_len:
+                            if page_start is None:
+                                page_start = page_info['page']
+                                chapter = page_info['chapter']
+                            page_end = page_info['page']
+                        
+                        char_count += page_text_len + 2  # +2 for \n\n separator
+                        
+                        if char_count > chunk_position + len(chunk_text):
+                            break
+                
                 chunk_data.append({
                     "chunk_id": f"{doc_id}_chunk_{idx}",
                     "text": chunk_text,
-                    "embedding": embedding.tolist(),  # Store as list for MongoDB
-                    "chunk_index": idx
+                    "embedding": embedding.tolist(),
+                    "chunk_index": idx,
+                    "page_start": page_start,         # NEW
+                    "page_end": page_end,             # NEW
+                    "chapter": chapter                # NEW
                 })
+                
+                chunk_position += len(chunk_text)
 
             # Store in database
             db = self.get_db()
@@ -327,7 +441,10 @@ class DocumentService:
                         "chunk_id": chunk["chunk_id"],
                         "text": chunk["text"],
                         "similarity": float(similarity),
-                        "chunk_index": chunk["chunk_index"]
+                        "chunk_index": chunk["chunk_index"],
+                        "page_start": chunk.get("page_start"),      # NEW: Include page metadata
+                        "page_end": chunk.get("page_end"),          # NEW: Include page metadata
+                        "chapter": chunk.get("chapter")             # NEW: Include chapter metadata
                     })
 
             # Sort by similarity and get top_k
@@ -397,7 +514,10 @@ class DocumentService:
                         "filename": filename,
                         "chunk_id": chunk["chunk_id"],
                         "text": chunk_text,
-                        "chunk_index": chunk["chunk_index"]
+                        "chunk_index": chunk["chunk_index"],
+                        "page_start": chunk.get("page_start"),      # NEW: Include page metadata
+                        "page_end": chunk.get("page_end"),          # NEW: Include page metadata
+                        "chapter": chunk.get("chapter")             # NEW: Include chapter metadata
                     })
                     corpus.append(self._tokenize(chunk_text))
 
@@ -514,6 +634,7 @@ class DocumentService:
             final_results = []
             for chunk_id, scores in combined_scores.items():
                 hybrid_score = (semantic_weight * scores["semantic_score"]) + (bm25_weight * scores["bm25_score"])
+                logger.info(f"Chunk: {chunk_id[:30]}... | Semantic: {scores['semantic_score']:.3f} | BM25: {scores['bm25_score']:.3f} | Hybrid: {hybrid_score:.3f}")
                 chunk = scores["chunk"]
                 chunk["hybrid_score"] = hybrid_score
                 final_results.append(chunk)
@@ -522,16 +643,25 @@ class DocumentService:
             final_results.sort(key=lambda x: x["hybrid_score"], reverse=True)
             top_results = final_results[:top_k]
 
-            # Build citations
+            # Build citations with page and chapter metadata
             citations = []
             for result in top_results:
-                citations.append({
+                citation = {
                     "doc_id": result["doc_id"],
                     "filename": result["filename"],
                     "chunk_text": result["text"],
                     "relevance_score": result["hybrid_score"],
-                    "chunk_index": result["chunk_index"]
-                })
+                    "chunk_index": result["chunk_index"],
+                    "page_start": result.get("page_start"),
+                    "page_end": result.get("page_end"),
+                    "chapter": result.get("chapter")
+                }
+                citations.append(citation)
+                
+                # DEBUG: Log each citation's metadata
+                logger.info(f"📄 Citation {len(citations)}: page_start={citation['page_start']}, page_end={citation['page_end']}, chapter={citation['chapter']}")
+            
+            logger.info(f"✅ Built {len(citations)} citations with metadata")
 
             # Build context
             context = self.build_rag_context(top_results)
@@ -552,22 +682,37 @@ class DocumentService:
 
     def build_rag_context(self, chunks: List[Dict[str, Any]]) -> str:
         """
-        Build context string from retrieved chunks for RAG prompt.
+        Build context string from retrieved chunks for RAG prompt with numbered citations.
 
         Args:
             chunks: List of relevant chunks
 
         Returns:
-            Formatted context string
+            Formatted context string with numbered references [1], [2], etc.
         """
         if not chunks:
             return ""
 
         context_parts = ["Here are relevant excerpts from the documents:\n"]
         for idx, chunk in enumerate(chunks, 1):
+            # Format chapter info
+            chapter_info = chunk.get('chapter') or 'Not specified'
+            
+            # Format page info
+            page_start = chunk.get('page_start')
+            if page_start:
+                page_info = f"Page {page_start}"
+                page_end = chunk.get('page_end')
+                if page_end and page_end != page_start:
+                    page_info += f"-{page_end}"
+            else:
+                page_info = "Page not specified"
+            
             context_parts.append(
-                f"\n[Document: {chunk['filename']}]\n"
-                f"{chunk['text']}\n"
+                f"\n[{idx}] Source: {chunk['filename']}\n"
+                f"    Chapter: {chapter_info}\n"
+                f"    {page_info}\n"
+                f"    {chunk['text']}\n"
             )
 
         return "\n".join(context_parts)

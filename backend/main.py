@@ -194,24 +194,33 @@ async def send_message(chat_id: str, message_data: MessageCreate, current=Depend
             else:
                 logger.info("No relevant documents found for RAG query")
 
-        # Combine RAG context with message content if available
-        content_for_ai = message_data.content
-        if rag_context:
-            content_for_ai = f"{rag_context}\n\nUser Question: {message_data.content}\n\nPlease answer based on the documents provided above."
-
+        # Pass RAG context as system message for stronger enforcement
+        if rag_context and citations:
+            logger.info(f"🔍 RAG CONTEXT ENABLED - passing as system message")
+            logger.info(f"📏 RAG context length: {len(rag_context)} chars")
+            logger.info(f"📄 Number of citations: {len(citations)}")
+        
         user_msg, ai_msg = await chat_service.process_message(
             owner_id=current["_id"],
             chat_id=chat_id,
-            content=content_for_ai,
+            content=message_data.content,  # Keep user question simple
             original_content=message_data.original_content or message_data.content,
             web_search_results=message_data.web_search_results,
-            image_path=None
+            image_path=None,
+            rag_context=rag_context  # Pass RAG as system message
         )
 
         # Convert ai_msg to dict and add citations
         ai_msg_dict = ai_msg.model_dump() if hasattr(ai_msg, 'model_dump') else dict(ai_msg)
         if citations:
             ai_msg_dict["citations"] = citations
+            # DEBUG: Print detailed citation info
+            logger.info("="*80)
+            logger.info(f"🔍 SENDING {len(citations)} CITATIONS TO FRONTEND")
+            logger.info(f"📋 First citation full structure:")
+            import json
+            logger.info(json.dumps(citations[0], indent=2, default=str))
+            logger.info("="*80)
 
         # Convert user_msg to dict as well for consistency
         user_msg_dict = user_msg.model_dump() if hasattr(user_msg, 'model_dump') else dict(user_msg)

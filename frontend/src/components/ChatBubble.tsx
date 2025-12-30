@@ -512,9 +512,25 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                           {message.content}
                         </ReactMarkdown>
 
+                        {/* DEBUG: Log message object */}
+                        {!isUser && console.log('🔍 FULL MESSAGE OBJECT:', message)}
+                        {!isUser && console.log('🔍 message.citations:', message.citations)}
+                        {!isUser && console.log('🔍 Has citations?', !!message.citations)}
+                        {!isUser && console.log('🔍 Citations length:', message.citations?.length)}
+
                         {/* RAG Document Citations */}
                         {!isUser && message.citations && message.citations.length > 0 && (
-                          <CitationCard citations={message.citations} />
+                          <>
+                            {console.log('=')}
+                            {console.log('=')}
+                            {console.log('🔍 ChatBubble: Received', message.citations.length, 'citations')}
+                            {console.log('📋 First citation structure:', message.citations[0])}
+                            {console.log('📄 Has page_start?', message.citations[0].page_start)}
+                            {console.log('📄 Has page_end?', message.citations[0].page_end)}
+                            {console.log('📖 Has chapter?', message.citations[0].chapter)}
+                            {console.log('=')}
+                            <CitationCard citations={message.citations} />
+                          </>
                         )}
 
                         {/* References */}
