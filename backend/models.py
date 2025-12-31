@@ -102,6 +102,28 @@ class Reference(BaseModel):
     url: str
     snippet: str
 
+# ---------- Document Processing Status ----------
+
+class DocumentStatus(str, Enum):
+    """Document processing status for streaming ingestion"""
+    UPLOADED = "uploaded"              # File saved, not yet processed
+    PROCESSING = "processing"          # Currently being processed
+    PARTIALLY_READY = "partially_ready"  # First batch done, rest processing
+    COMPLETED = "completed"            # Fully processed
+    FAILED = "failed"                  # Processing failed
+
+class DocumentProgress(BaseModel):
+    """Track document processing progress for large files"""
+    doc_id: str
+    status: DocumentStatus
+    total_pages: Optional[int] = None
+    pages_processed: int = 0
+    chunks_created: int = 0
+    error_message: Optional[str] = None
+    started_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime] = None
+
 class MessageRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
@@ -179,6 +201,8 @@ class DocumentInfo(BaseModel):
     doc_type: str  # 'admin' or 'user'
     file_size: int
     chunk_count: int
+    status: DocumentStatus = DocumentStatus.UPLOADED  # NEW: Processing status
+    progress: Optional[DocumentProgress] = None       # NEW: Progress tracking
 
 class DocumentUploadResponse(BaseModel):
     message: str
@@ -186,13 +210,12 @@ class DocumentUploadResponse(BaseModel):
 
 
 class Citation(BaseModel):
-    """Citation/reference for RAG responses with page and chapter info"""
+    """RAG citation with page and chapter metadata"""
     doc_id: str
     filename: str
     chunk_text: str
     relevance_score: float
     chunk_index: int
-    page_start: Optional[int] = None     # Page where chunk starts
-    page_end: Optional[int] = None       # Page where chunk ends (if multi-page)
-    chapter: Optional[str] = None        # Chapter/section title
-
+    page_start: Optional[int] = None  # NEW: Start page number
+    page_end: Optional[int] = None    # NEW: End page number
+    chapter: Optional[str] = None     # NEW: Chapter title

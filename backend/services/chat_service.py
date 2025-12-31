@@ -91,18 +91,35 @@ class ChatService:
         chat_id: str,
         role: MessageRole,
         content: str,
-        file_info: Optional[FileInfo] = None
+        file_info: Optional[FileInfo] = None,
+        citations: Optional[List] = None  # NEW: Citations from RAG
     ) -> Message:
+        # DEBUG: Log citations being saved
+        if citations:
+            logger.info(f"💾 SAVING MESSAGE WITH {len(citations)} CITATIONS")
+        else:
+            logger.info(f"💾 SAVING MESSAGE WITHOUT CITATIONS (citations={citations})")
+            
         message = Message(
             chat_id=chat_id,
             role=role,
             content=content,
             file=file_info,
             timestamp=datetime.utcnow(),
-            owner_id=owner_id
+            owner_id=owner_id,
+            citations=citations  # NEW: Include citations
         )
+        
+        # DEBUG: Verify message object has citations
+        logger.info(f"📋 Message object citations: {message.citations}")
+        
         db = self.get_db()
-        await db.messages.insert_one(message.model_dump())
+        message_dict = message.model_dump()
+        
+        # DEBUG: Verify dict has citations before saving
+        logger.info(f"📋 Message dict citations: {message_dict.get('citations')}")
+        
+        await db.messages.insert_one(message_dict)
         await db.chats.update_one(
             {"_id": chat_id, "owner_id": owner_id},
             {"$set": {"updated_at": datetime.utcnow()}, "$inc": {"message_count": 1}}
@@ -121,7 +138,8 @@ class ChatService:
         file_info: Optional[FileInfo] = None,
         web_search_results: Optional[str] = None,
         image_path: Optional[str] = None,
-        rag_context: Optional[str] = None  # NEW: RAG context
+        rag_context: Optional[str] = None,
+        citations: Optional[List] = None  # NEW: Citations from RAG
     ) -> Tuple[Message, Message]:
         # User message
         user_message = await self.add_message(
@@ -147,12 +165,13 @@ class ChatService:
         # Get AI response - pass rag_context if provided
         ai_content = await ai_service.generate_response(messages, image_path, rag_context=rag_context)
 
-        # Save AI message
+        # Save AI message with citations
         ai_message = await self.add_message(
             owner_id=owner_id,
             chat_id=chat_id,
             role=MessageRole.ASSISTANT,
-            content=ai_content
+            content=ai_content,
+            citations=citations  # NEW: Persist citations
         )
 
         # Auto-title if first round

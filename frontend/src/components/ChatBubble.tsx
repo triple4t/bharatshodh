@@ -512,11 +512,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                           {message.content}
                         </ReactMarkdown>
 
-                        {/* DEBUG: Log message object */}
+                        {/* DEBUG: Log message object
                         {!isUser && console.log('🔍 FULL MESSAGE OBJECT:', message)}
                         {!isUser && console.log('🔍 message.citations:', message.citations)}
                         {!isUser && console.log('🔍 Has citations?', !!message.citations)}
-                        {!isUser && console.log('🔍 Citations length:', message.citations?.length)}
+                        {!isUser && console.log('🔍 Citations length:', message.citations?.length)} */}
 
                         {/* RAG Document Citations */}
                         {!isUser && message.citations && message.citations.length > 0 && (
