@@ -18,6 +18,7 @@ import LogoWhite from "../asset/img/bharat5.png";
 
 import { apiService, UserPublic } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 
 interface SidebarProps {
   chats: Chat[];
@@ -45,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [userInfo, setUserInfo] = useState<UserPublic | null>(null);
   const { signOut } = useAuth();
   const { resolvedMode } = useThemeMode();
+  const { t } = useLanguage();
 
   // Fetch user info
   useEffect(() => {
@@ -166,16 +168,16 @@ const Sidebar: React.FC<SidebarProps> = ({
               />
             </div>
             <div>
-              <h2
+              <h1
                 style={{
                   color: "var(--theme-text)",
-                  fontSize: "24px",
+                  fontSize: "18px",
                   fontWeight: "700",
                   margin: 0,
                 }}
               >
-                BharatShodh
-              </h2>
+                {t("app.title")}
+              </h1>
               <p
                 style={{
                   color: "var(--theme-text-secondary)",
@@ -183,7 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   margin: 0,
                 }}
               >
-                AI Assistant
+                {t("app.subtitle")}
               </p>
             </div>
           </div>
@@ -222,7 +224,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
           >
             <SquarePen size={18} />
-            New Chat
+            {t("new.chat")}
             <Sparkles size={16} style={{ marginLeft: "auto" }} />
           </button>
         </div>
@@ -249,9 +251,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 }}
               />
               <p style={{ fontSize: "14px", lineHeight: "1.5", margin: 0 }}>
-                No conversations yet.
+                {t("no.conversations")}
                 <br />
-                Start a new chat to begin your journey.
+                {t("start.journey")}
               </p>
             </div>
           ) : (
@@ -370,7 +372,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           e.currentTarget.style.color =
                             "var(--theme-iconColor)";
                         }}
-                        title="Rename chat"
+                        title={t("rename.chat")}
                       >
                         <Edit3 size={14} />
                       </button>
@@ -398,7 +400,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             "var(--theme-iconBg)";
                           e.currentTarget.style.color = "var(--theme-error)";
                         }}
-                        title="Delete chat"
+                        title={t("delete.chat")}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -489,7 +491,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   e.currentTarget.style.background = "var(--theme-iconBg)";
                   e.currentTarget.style.color = "var(--theme-iconColor)";
                 }}
-                title="Logout"
+                title={t("logout")}
               >
                 <LogOut size={16} />
               </button>
@@ -516,7 +518,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <User size={20} style={{ color: "var(--theme-iconColor)" }} />
               </div>
-              <span style={{ fontSize: "14px" }}>Loading...</span>
+              <span style={{ fontSize: "14px" }}>{t("loading")}</span>
             </div>
           )}
         </div>

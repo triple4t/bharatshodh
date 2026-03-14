@@ -1,14 +1,21 @@
-
 import uuid
-from typing import List, Optional, Tuple, Iterator
-from datetime import datetime
 import logging
-from database import get_database
-from models import Chat, Message, MessageRole, FileInfo, TTSRequest
-from services.ai_service import ai_service
-from config import settings
-import azure.cognitiveservices.speech as speechsdk
+import json
+from typing import List, Optional, Tuple, Dict, Any
+from datetime import datetime
+import base64
 
+try:
+    from sarvamai import SarvamAI
+except ImportError:
+    SarvamAI = None
+
+import azure.cognitiveservices.speech as speechsdk
+from models import Message, MessageRole, Chat, FileInfo, TTSRequest
+from database import get_database
+from config import settings
+from .ai_service import ai_service
+from .document_service import document_service  # For RAG
 
 
 logger = logging.getLogger(__name__)
@@ -211,5 +218,117 @@ class ChatService:
         return result.audio_data
 
 
+    def _clean_text_for_tts(self, text: str) -> str:
+        """Remove markdown and special characters that shouldn't be spoken."""
+        import re
+        # Remove markdown bold/italic
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
+        # Remove markdown links [text](url) -> text
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+        # Remove code blocks
+        text = re.sub(r'`(.*?)`', r'\1', text)
+        # Remove citations like [1], [2]
+        text = re.sub(r'\[\d+\]', '', text)
+        return text.strip()
+
+    def sarvam_tts_audio_bytes(self, req: TTSRequest) -> bytes:
+        if not settings.sarvam_api_key:
+            raise ValueError("SARVAM_API_KEY is not set in configuration")
+            
+        if SarvamAI is None:
+            raise ImportError("sarvamai package is not installed")
+
+        try:
+            client = SarvamAI(api_subscription_key=settings.sarvam_api_key)
+            
+            # Valid Sarvam voices
+            VALID_VOICES = {
+                'anushka', 'abhilash', 'manisha', 'vidya', 'arya', 'karun', 'hitesh', 
+                'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 
+                'kavya', 'amit', 'dev', 'ishita', 'shreya', 'ratan', 'varun', 'manan', 
+                'sumit', 'roopa', 'kabir', 'aayan', 'shubh', 'ashutosh', 'advait', 
+                'amelia', 'sophia', 'anand', 'tanya', 'tarun', 'sunny', 'mani', 'gokul', 
+                'vijay', 'shruti', 'suhani', 'mohit', 'kavitha', 'rehan', 'soham', 'rupali'
+            }
+            
+            # Map simplified voice IDs or use defaults if not specified
+            # Ensure the requested voice is valid, otherwise default to 'shubh'
+            speaker = req.voice_id if req.voice_id in VALID_VOICES else "shubh"
+            
+            # Clean text to remove symbols
+            cleaned_text = self._clean_text_for_tts(req.text)
+            
+            # Use 'hi-IN' for Hindi text if detected, else 'en-IN'
+            # For now, using 'en-IN' as default or based on request if we had language field
+            target_language_code = "hi-IN" 
+            
+            # Generate speech
+            response = client.text_to_speech.convert(
+                text=cleaned_text,
+                target_language_code=target_language_code,
+                model="bulbul:v3", 
+                speaker=speaker
+            )
+            
+            logger.info(f"Sarvam Response Type: {type(response)}")
+
+            # Check if it's the Pydantic model response
+            if hasattr(response, 'audios') and response.audios:
+                # It might have an 'audios' field which is a list of base64 strings
+                audio_base64 = response.audios[0]
+            elif hasattr(response, 'audio'):
+                 audio_base64 = response.audio
+            elif isinstance(response, list) and len(response) > 0:
+                audio_base64 = response[0]
+            elif isinstance(response, str):
+                audio_base64 = response
+            else:
+                # Fallback: Many Pydantic models dump their main content via str() or model_dump()
+                # But looking at previous error logs, it seems to print the object repr.
+                # Let's try to inspect it via dict if possible or just use the first field.
+                try:
+                    # If it's a pydantic model
+                    if hasattr(response, 'model_dump'):
+                        data = response.model_dump()
+                        if 'audios' in data:
+                            audio_base64 = data['audios'][0]
+                        elif 'audio' in data:
+                            audio_base64 = data['audio']
+                except:
+                    pass
+                
+                if not audio_base64:
+                    logger.warning(f"Could not extract audio from {type(response)}. Trying str()")
+                    audio_base64 = str(response)
+
+            # Clean potential garbage if string representation was used accidentally
+            if isinstance(audio_base64, str):
+                # Remove [' and '] if they exist (just in case)
+                if audio_base64.startswith("['") and audio_base64.endswith("']"):
+                    audio_base64 = audio_base64[2:-2]
+            
+            audio_data = base64.b64decode(audio_base64)
+            return audio_data
+
+        except Exception as e:
+            logger.error(f"Sarvam TTS failed: {e}")
+            raise RuntimeError(f"Sarvam TTS failed: {e}")
+
+    def generate_tts_audio(self, req: TTSRequest) -> bytes:
+        """Generate TTS audio using the configured provider."""
+        provider = settings.tts_provider.lower()
+        
+        if provider == "sarvam":
+            try:
+                return self.sarvam_tts_audio_bytes(req)
+            except Exception as e:
+                logger.error(f"Sarvam TTS failed, falling back to Azure: {e}")
+                # Fallback to Azure
+                return self.azure_tts_audio_bytes(req)
+        else:
+            return self.azure_tts_audio_bytes(req)
+
 chat_service = ChatService()
+
 

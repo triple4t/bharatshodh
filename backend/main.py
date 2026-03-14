@@ -330,19 +330,29 @@ async def upload_file(
 @app.post("/api/tts")
 async def generate_speech(data: TTSRequest):
     try:
-        audio_bytes = chat_service.azure_tts_audio_bytes(data)
+        # Use provider-agnostic generator (Azure or Sarvam based on config)
+        audio_bytes = chat_service.generate_tts_audio(data)
 
         if not audio_bytes:
-            raise RuntimeError("Azure TTS returned empty audio")
+            raise RuntimeError("TTS service returned empty audio")
+
+        # Determine media type based on provider
+        # Azure returns MP3, Sarvam typically returns WAV
+        media_type = "audio/mpeg"
+        filename = "speech.mp3"
+        
+        if settings.tts_provider.lower() == "sarvam":
+            media_type = "audio/wav"
+            filename = "speech.wav"
 
         return Response(
             content=audio_bytes,
-            media_type="audio/mpeg",
+            media_type=media_type,
             headers={
                 "Content-Length": str(len(audio_bytes)),
                 "Accept-Ranges": "bytes",
                 "Cache-Control": "no-store",
-                "Content-Disposition": 'inline; filename="speech.mp3"',
+                "Content-Disposition": f'inline; filename="{filename}"',
             },
         )
 

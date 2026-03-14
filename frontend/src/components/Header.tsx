@@ -1,5 +1,5 @@
-import React from "react";
 import { Menu, MessageSquare, Sparkles } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -10,6 +10,7 @@ const Header: React.FC<HeaderProps> = ({
   onToggleSidebar,
   currentChatTitle,
 }) => {
+  const { t } = useLanguage();
   return (
     <header
       className="md:hidden px-4 py-3 flex items-center justify-between relative"
@@ -80,7 +81,7 @@ const Header: React.FC<HeaderProps> = ({
               lineHeight: "1.2",
             }}
           >
-            {currentChatTitle || "New Chat"}
+             {currentChatTitle || t("new.chat")}
           </h1>
           <p
             style={{
@@ -93,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Sparkles size={10} />
-            BharatShodh
+            {t("app.title")}
           </p>
         </div>
       </div>

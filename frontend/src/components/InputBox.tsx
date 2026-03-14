@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Send, Mic, MicOff, Paperclip, Globe, X, FileText } from "lucide-react";
 import { useVoice } from "../hooks/useVoice";
+import { useLanguage } from "../context/LanguageContext";
 
 interface InputBoxProps {
   onSendMessage: (message: string, file?: File, useWebSearch?: boolean, useDocuments?: boolean) => void;
@@ -26,6 +27,7 @@ const InputBox: React.FC<InputBoxProps> = ({
   const [useWebSearch, setUseWebSearch] = useState(false);
   const [useDocuments, setUseDocuments] = useState(false); // NEW: Document RAG toggle
   const { voiceState, startListening, stopListening } = useVoice();
+  const { t } = useLanguage();
 
   // Auto-resize textarea
   const adjustTextareaHeight = () => {
@@ -159,7 +161,7 @@ const InputBox: React.FC<InputBoxProps> = ({
                       display: "flex",
                       alignItems: "center",
                     }}
-                    title="Attach file"
+                    title={t("attach.file")}
                   >
                     <Paperclip size={20} />
                   </button>
@@ -181,7 +183,7 @@ const InputBox: React.FC<InputBoxProps> = ({
                     display: "flex",
                     alignItems: "center",
                   }}
-                  title={voiceState.isListening ? "Stop listening" : "Start voice input"}
+                  title={voiceState.isListening ? t("stop.voice") : t("start.voice")}
                 >
                   {voiceState.isListening ? <MicOff size={20} /> : <Mic size={20} />}
                 </button>
@@ -203,10 +205,10 @@ const InputBox: React.FC<InputBoxProps> = ({
                     cursor: "pointer",
                     fontSize: "14px",
                   }}
-                  title="Toggle web search"
+                  title={t("search.web.tooltip")}
                 >
                   <Globe size={16} />
-                  <span>Search</span>
+                  <span>{t("search.web")}</span>
                 </button>
               )}
 
@@ -225,10 +227,10 @@ const InputBox: React.FC<InputBoxProps> = ({
                   cursor: "pointer",
                   fontSize: "14px",
                 }}
-                title="Toggle document Q&A mode"
+                title={t("docs.rag.tooltip")}
               >
                 <FileText size={16} />
-                <span>Docs</span>
+                <span>{t("docs.rag")}</span>
               </button>
             </div>
 
@@ -246,7 +248,7 @@ const InputBox: React.FC<InputBoxProps> = ({
                 display: "flex",
                 alignItems: "center",
               }}
-              title="Send message"
+              title={t("send.message")}
             >
               <Send size={20} />
             </button>
@@ -264,7 +266,7 @@ const InputBox: React.FC<InputBoxProps> = ({
             fontSize: "13px",
             textAlign: "center",
           }}>
-            📚 Document Q&A Mode Active - Answers will be based on uploaded documents
+            {t("docs.mode.active")}
           </div>
         )}
       </div>

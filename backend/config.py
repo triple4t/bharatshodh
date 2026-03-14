@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Azure Speech Service
     azure_speech_key: str
     azure_speech_region: str
+    
+    # Sarvam AI
+    sarvam_api_key: str = None
+    tts_provider: str = "azure"  # Options: "azure", "sarvam"
+
     # HTTP Configuration for Email Services through Brevo
     brevo_api_key: str
     app_from_email: str
