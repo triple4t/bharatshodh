@@ -14,7 +14,8 @@ from sentence_transformers import SentenceTransformer
 
 from database import get_database
 from config import settings
-from .vector_index import VectorIndexManager  # NEW: FAISS vector indexcxDocument
+from .vector_index import VectorIndexManager
+from .embedding_service import embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +81,9 @@ class DocumentService:
         os.makedirs(self.doc_dir, exist_ok=True)
         
         # NEW: Initialize FAISS vector index
-        self.vector_index = VectorIndexManager()
+        self.vector_index = VectorIndexManager(dimension=embedding_service.dimension)
         self.vector_index.load()  # Load existing index if available
-        logger.info("DocumentService initialized with FAISS vector index")
+        logger.info(f"DocumentService initialized with FAISS vector index (dim={embedding_service.dimension})")
 
     def get_db(self):
         """Get database connection"""
@@ -91,12 +92,8 @@ class DocumentService:
         return self.db
 
     def get_embedding_model(self):
-        """Lazy load embedding model (same as semantic_cache)"""
-        if self.embedding_model is None:
-            model_name = getattr(settings, "semantic_cache_embedding_model", "all-MiniLM-L6-v2")
-            logger.info(f"Loading embedding model: {model_name}")
-            self.embedding_model = SentenceTransformer(model_name)
-        return self.embedding_model
+        """Use the centralized embedding service"""
+        return embedding_service
 
     def _compute_embedding(self, text: str) -> np.ndarray:
         """Compute embedding vector for text"""

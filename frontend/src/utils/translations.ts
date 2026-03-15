@@ -36,6 +36,18 @@ export const translations = {
     "failed.search": "Web search unavailable, using AI knowledge",
     "error.processing": "Sorry, I encountered an error while processing your message. Please try again.",
 
+    // Empty State / Suggestions
+    "welcome.title": "How can I help you today?",
+    "welcome.desc": "I'm here to assist you with questions, creative tasks, analysis, and more. Start a conversation below!",
+    "suggest.ideas.title": "Get Ideas",
+    "suggest.ideas.desc": "Brainstorm creative solutions",
+    "suggest.analyze.title": "Analyze Data",
+    "suggest.analyze.desc": "Review and interpret information",
+    "suggest.write.title": "Write Content",
+    "suggest.write.desc": "Create articles, emails, and more",
+    "suggest.research.title": "Research Topics",
+    "suggest.research.desc": "Find and summarize information",
+
     // Theme/Language Toggle
     "theme.light": "Light theme",
     "theme.dark": "Dark theme",
@@ -84,6 +96,18 @@ export const translations = {
     "failed.send": "संदेश भेजने में विफल। कृपया पुन: प्रयास करें।",
     "failed.search": "वेब सर्च अनुपलब्ध, एआई ज्ञान का उपयोग कर रहे हैं",
     "error.processing": "क्षमा करें, आपके संदेश को संसाधित करते समय मुझे एक त्रुटि हुई। कृपया पुन: प्रयास करें।",
+
+    // Empty State / Suggestions
+    "welcome.title": "मैं आज आपकी कैसे सहायता कर सकता हूँ?",
+    "welcome.desc": "मैं यहां सवालों, रचनात्मक कार्यों, विश्लेषण और बहुत कुछ में आपकी सहायता करने के लिए हूं। नीचे बातचीत शुरू करें!",
+    "suggest.ideas.title": "विचार प्राप्त करें",
+    "suggest.ideas.desc": "रचनात्मक समाधानों पर विचार करें",
+    "suggest.analyze.title": "डेटा विश्लेषण",
+    "suggest.analyze.desc": "जानकारी की समीक्षा और व्याख्या करें",
+    "suggest.write.title": "कंटेंट लिखें",
+    "suggest.write.desc": "लेख, ईमेल और बहुत कुछ बनाएं",
+    "suggest.research.title": "विषय अनुसंधान",
+    "suggest.research.desc": "जानकारी खोजें और सारांशित करें",
 
     // Theme/Language Toggle
     "theme.light": "लाइट थीम",

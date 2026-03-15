@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = "2024-02-15-preview"
     azure_openai_deployment_name: str = "gpt-4o"
     azure_openai_embedding_deployment_name: str = "text-embedding-3-small"
+    azure_openai_embedding_api_version: str = "2023-05-15"
+    azure_openai_embedding_endpoint: str = None
     # JWT
     JWT_SECRET: str 
     JWT_ALGO: str 

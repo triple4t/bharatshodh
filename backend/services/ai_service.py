@@ -25,8 +25,8 @@ class AIService:
             api_key=settings.azure_openai_api_key,
             api_version=settings.azure_openai_api_version,
             deployment_name=settings.azure_openai_deployment_name,
-            temperature=0.7,
-            max_tokens=2000,
+            temperature=1,
+            max_completion_tokens=2000,
         )
 
         # Initialize semantic cache (lazy initialization)

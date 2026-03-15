@@ -10,6 +10,7 @@ from redis.commands.search.field import VectorField, TextField, NumericField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 from config import settings
+from .embedding_service import embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +77,10 @@ class SemanticCache:
             self.redis_client.ping()
             logger.info(f"Connected to Redis at {redis_host}:{redis_port}")
 
-            # Initialize embedding model
-            logger.info(f"Loading embedding model: {embedding_model}")
-            self.embedding_model = SentenceTransformer(embedding_model)
-            self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
-            logger.info(f"Embedding dimension: {self.embedding_dim}")
+            # Initialize embedding info
+            self.embedding_service = embedding_service
+            self.embedding_dim = self.embedding_service.dimension
+            logger.info(f"Semantic Cache using embedding dimension: {self.embedding_dim}")
 
             # Create or verify search index
             self._create_search_index()
@@ -137,8 +137,9 @@ class SemanticCache:
             raise
 
     def _compute_embedding(self, text: str) -> np.ndarray:
-        """Compute embedding vector for text"""
-        return self.embedding_model.encode(text, convert_to_numpy=True)
+        """Compute embedding vector for text using the centralized service"""
+        embedding = self.embedding_service.embed_query(text)
+        return np.array(embedding, dtype=np.float32)
 
     def _create_context_hash(self, messages: List[Any]) -> str:
         """
