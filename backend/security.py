@@ -96,7 +96,10 @@ def create_access_token(payload: Dict[str, Any], expires_minutes: Optional[int] 
     expire = now + timedelta(minutes=exp_min)
 
     # iat (issued at) is required to later check against password_changed_at
-    to_encode.update({"exp": expire, "iat": int(now.timestamp())})
+    to_encode.update({
+        "exp": expire,
+        "iat": int(now.timestamp())
+    })
     token = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGO)
     return token
 
@@ -122,32 +125,35 @@ async def get_current_user(request: Request, creds: HTTPAuthorizationCredentials
     db = get_database()
     user = await db.users.find_one({"_id": user_id})
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        import logging
+        logging.error(f"Auth failure: User not found for ID '{user_id}' in database")
+        raise HTTPException(status_code=401, detail=f"User session invalid (user '{user_id}' not found)")
 
     # If user changed password after token issuance, invalidate the token
     token_iat = data.get("iat")
     if token_iat is not None:
         password_changed_at = user.get("password_changed_at")
         if password_changed_at:
-            # ensure password_changed_at is a datetime object; if stored as string, parse it accordingly
+            # ensure password_changed_at is a datetime object
             if isinstance(password_changed_at, str):
                 try:
-                    # try to parse ISO format
-                    parsed = datetime.fromisoformat(password_changed_at)
-                    password_changed_at = parsed
+                    password_changed_at = datetime.fromisoformat(password_changed_at)
                 except Exception:
-                    # if parsing fails, convert via timestamp float/int
                     try:
                         password_changed_at = datetime.fromtimestamp(float(password_changed_at), timezone.utc)
                     except Exception:
                         password_changed_at = None
 
             if password_changed_at:
-                # convert to timestamp for comparison; normalize to UTC if naive
+                # normalize to UTC if naive
                 if password_changed_at.tzinfo is None:
                     password_changed_at = password_changed_at.replace(tzinfo=timezone.utc)
+                
+                # Buffer of 1 second to account for slight timing differences during issuance
                 if token_iat < int(password_changed_at.timestamp()):
-                    raise HTTPException(status_code=401, detail="Token invalid, please log in again")
+                    import logging
+                    logging.warning(f"Auth failure: Password was changed at {password_changed_at.isoformat()} which is after token iat {token_iat}")
+                    raise HTTPException(status_code=401, detail="Security update found. Please log in again for your safety.")
 
     # normalize id for downstream
     user["_id"] = str(user["_id"])

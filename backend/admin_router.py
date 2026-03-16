@@ -1,7 +1,7 @@
 """
 Admin authentication and management router
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import uuid
 import shutil
@@ -83,7 +83,7 @@ async def register_admin(payload: AdminRegister):
         "username": payload.username.lower().strip(),
         "email": payload.email.lower().strip(),
         "password_hash": hash_password(payload.password),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "is_super_admin": is_first_admin,  # First admin is super admin
         "is_active": True,
     }
@@ -236,7 +236,7 @@ async def approve_user(user_id: str, authorization: str = Header(None, alias="Au
     # Update user status
     await db.users.update_one(
         {"_id": user_id},
-        {"$set": {"status": "approved", "approved_at": datetime.utcnow()}}
+        {"$set": {"status": "approved", "approved_at": datetime.now(timezone.utc)}}
     )
     
     # Send approval email
@@ -275,7 +275,7 @@ async def reject_user(
         {
             "$set": {
                 "status": "rejected",
-                "rejected_at": datetime.utcnow(),
+                "rejected_at": datetime.now(timezone.utc),
                 "rejection_reason": reason or "Account does not meet requirements"
             }
         }
@@ -440,7 +440,7 @@ async def upload_admin_document(
             document=DocumentInfo(
                 id=doc_id,
                 filename=file.filename,
-                upload_date=datetime.utcnow(),
+                upload_date=datetime.now(timezone.utc),
                 uploaded_by=admin_id,
                 doc_type="admin",
                 file_size=file_size,

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from fastapi import APIRouter, HTTPException, Depends,BackgroundTasks
 from models import UserCreate, UserLogin, UserPublic, TokenResponse, ForgotPasswordRequest, ResetPasswordRequest, UserApprovalRequest, ApprovalResponse
@@ -25,7 +25,7 @@ async def register(payload: UserCreate):
         "email": payload.email.lower().strip(),
         "name": payload.name,
         "password_hash": hash_password(payload.password),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "status": "pending",  # New users start as pending
         "approved_at": None,
     }
@@ -98,7 +98,7 @@ async def forgot_password(payload: ForgotPasswordRequest, background_tasks: Back
 @router.post("/reset-password")
 async def reset_password(payload: ResetPasswordRequest):
     db = get_database()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     token_hash = hash_value(payload.token)
 
     user = await db.users.find_one({
@@ -125,7 +125,7 @@ async def reset_password(payload: ResetPasswordRequest):
 
 # ---------- ADMIN APPROVAL ENDPOINTS ----------
 
-@router.get("/api/admin/pending-users")
+@router.get("/admin/pending-users")
 async def get_pending_users(admin_token: str):
     """
     Get list of pending users waiting for approval.
@@ -148,7 +148,7 @@ async def get_pending_users(admin_token: str):
     return {"pending_users": users}
 
 
-@router.post("/api/admin/approve-user", response_model=ApprovalResponse)
+@router.post("/admin/approve-user", response_model=ApprovalResponse)
 async def approve_user(payload: UserApprovalRequest, background_tasks: BackgroundTasks, admin_token: str):
     """
     Approve a pending user and send approval email.
@@ -190,7 +190,7 @@ async def approve_user(payload: UserApprovalRequest, background_tasks: Backgroun
     )
 
 
-@router.post("/api/admin/reject-user", response_model=ApprovalResponse)
+@router.post("/admin/reject-user", response_model=ApprovalResponse)
 async def reject_user(payload: UserApprovalRequest, background_tasks: BackgroundTasks, admin_token: str):
     """
     Reject a pending user and send rejection email.
