@@ -6,6 +6,8 @@ import os
 import json
 
 class Settings(BaseSettings):
+    # App General
+    app_name: str = "BharatShodh"
     # Azure OpenAI
     azure_openai_api_key: str
     azure_openai_endpoint: str
@@ -28,14 +30,19 @@ class Settings(BaseSettings):
     sarvam_api_key: str = None
     tts_provider: str = "azure"  # Options: "azure", "sarvam"
 
-    # HTTP Configuration for Email Services through Brevo
-    brevo_api_key: str
+    # SMTP Configuration for Email Services
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str
+    smtp_password: str
+    smtp_from: str
     app_from_email: str
     reset_token_ttl_minutes: int = 15
     rate_limit_redis_url: str = None  # optional
 
-    # Frontend URL for password reset
-    frontend_reset_url: str="http://localhost:5173/reset-password"
+    # Frontend URLs
+    frontend_reset_url: str = "http://localhost:5173/reset-password"
+    frontend_login_url: str = "http://localhost:5173/signin"
 
     # MongoDB
     mongodb_url: str = "mongodb://localhost:27017"

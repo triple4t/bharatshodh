@@ -20,8 +20,17 @@ class EmbeddingService:
 
         if self.azure_mode:
             logger.info("Initializing Azure OpenAI Embedding Service")
+            
+            # Sanitize endpoint: strip any trailing paths like /openai/v1/embeddings
+            endpoint = settings.azure_openai_embedding_endpoint or settings.azure_openai_endpoint
+            if endpoint and "/openai" in endpoint:
+                endpoint = endpoint.split("/openai")[0]
+            
+            # Ensure no trailing slash for cleaner construction
+            endpoint = endpoint.rstrip("/")
+            
             self._azure_model = AzureOpenAIEmbeddings(
-                azure_endpoint=settings.azure_openai_embedding_endpoint or settings.azure_openai_endpoint,
+                azure_endpoint=endpoint,
                 api_key=settings.azure_openai_api_key,
                 azure_deployment=settings.azure_openai_embedding_deployment_name,
                 openai_api_version=settings.azure_openai_embedding_api_version or settings.azure_openai_api_version,
@@ -51,6 +60,18 @@ class EmbeddingService:
         else:
             embeddings = self._get_local_model().encode(texts, convert_to_numpy=True)
             return embeddings.tolist()
+
+    def encode(self, text: Union[str, List[str]], convert_to_numpy: bool = True) -> Union[np.ndarray, List[float], List[List[float]]]:
+        """
+        Compatibility shim for legacy code calling .encode().
+        Always returns numpy array by default if convert_to_numpy is True.
+        """
+        if isinstance(text, str):
+            embedding = self.embed_query(text)
+            return np.array(embedding) if convert_to_numpy else embedding
+        else:
+            embeddings = self.embed_documents(text)
+            return np.array(embeddings) if convert_to_numpy else embeddings
 
     @property
     def dimension(self) -> int:
