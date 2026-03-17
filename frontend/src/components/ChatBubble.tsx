@@ -1,6 +1,6 @@
 
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Volume2, User, VolumeOff, Link } from "lucide-react";
@@ -12,6 +12,7 @@ import LogoBlack from "../asset/img/bharat5.png";
 import LogoWhite from "../asset/img/bharat5.png";
 import { useThemeMode } from "../context/ThemeContext";
 import { useVoice } from "../hooks/useVoice";
+import { useLanguage } from "../context/LanguageContext";
 
 
 interface ChatBubbleProps {
@@ -24,18 +25,16 @@ interface ChatBubbleProps {
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const isUser = message.role === "user";
   const [showSources, setShowSources] = useState(false);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [copied, setCopied] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { ttsState, speak, stopSpeaking } = useVoice();
+  const { t } = useLanguage();
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setCopied(true);
-    onCopy("Message copied to clipboard!");
+    onCopy(t("copied"));
     setTimeout(() => setCopied(false), 2000);
   };
   const handleSpeakToggle = async (text: string) => {
@@ -64,19 +63,24 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
     title,
     children,
     variant = "default",
+    disabled = false,
   }: {
     onClick: () => void;
     title: string;
     children: React.ReactNode;
     variant?: "default" | "success" | "danger";
+    disabled?: boolean;
   }) => (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       style={{
         padding: "8px",
         borderRadius: "8px",
         background: "var(--theme-iconBg)",
+        opacity: disabled ? 0.5 : 1,
+        pointerEvents: disabled ? "none" : "auto",
         color:
           variant === "success"
             ? "var(--theme-success)"
@@ -151,7 +155,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
             ) : (
               <img
                 src={logoSrc}
-                alt="BharatShodh"
+                alt={t("app.title")}
                 className="w-8 h-8 rounded-lg"
               />
             )}
@@ -177,7 +181,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
               <div className="hidden md:flex items-center gap-2 opacity-100 transition-opacity">
                 <ActionButton
                   onClick={handleCopy}
-                  title={copied ? "Copied!" : "Copy message"}
+                  title={copied ? t("copied") : t("copy")}
                   variant={copied ? "success" : "default"}
                 >
                   <Copy size={14} />
@@ -187,10 +191,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                     onClick={() => handleSpeakToggle(message.content)}
                     title={
                       ttsState.isLoading
-                        ? "Preparing audio"
+                        ? t("loading")
                         : ttsState.isSpeaking
-                        ? "Stop audio"
-                        : "Read aloud"
+                        ? t("stop.speaking")
+                        : t("speak")
                     }
                     disabled={!ttsState.isEnabled || ttsState.isLoading}
                   >
@@ -266,7 +270,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                                 marginBottom: "4px",
                                 wordBreak: "break-word",
                               }}
-                              onM ouseEnter={(e) => {
+                              onMouseEnter={(e) => {
                                 e.currentTarget.style.textDecoration =
                                   "underline";
                               }}
@@ -274,7 +278,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                                 e.currentTarget.style.textDecoration = "none";
                               }}
                             >
-                              {src.title || src.name || src.url}
+                              {(src as any).title || (src as any).name || (src as any).url}
                             </a>
                             <p
                               style={{
@@ -342,9 +346,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                             src={
                               message.file instanceof File
                                 ? URL.createObjectURL(message.file)
-                                : message.file.url?.startsWith("http")
-                                ? message.file.url
-                                : `https://bharatshodh.com${message.file.url}`
+                                : (message.file as any).url?.startsWith("http")
+                                ? (message.file as any).url
+                                : `https://bharatshodh.com${(message.file as any).url}`
                             }
                             alt={message.fileName}
                             style={{
@@ -440,7 +444,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                               className,
                               children,
                               ...props
-                            }) => {
+                            }: any) => {
                               const match = /language-(\w+)/.exec(
                                 className || ""
                               );
@@ -512,9 +516,25 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                           {message.content}
                         </ReactMarkdown>
 
+                        {/* DEBUG: Log message object
+                        {!isUser && console.log('🔍 FULL MESSAGE OBJECT:', message)}
+                        {!isUser && console.log('🔍 message.citations:', message.citations)}
+                        {!isUser && console.log('🔍 Has citations?', !!message.citations)}
+                        {!isUser && console.log('🔍 Citations length:', message.citations?.length)} */}
+
                         {/* RAG Document Citations */}
                         {!isUser && message.citations && message.citations.length > 0 && (
-                          <CitationCard citations={message.citations} />
+                          <>
+                            {console.log('=')}
+                            {console.log('=')}
+                            {console.log('🔍 ChatBubble: Received', message.citations.length, 'citations')}
+                            {console.log('📋 First citation structure:', message.citations[0])}
+                            {console.log('📄 Has page_start?', message.citations[0].page_start)}
+                            {console.log('📄 Has page_end?', message.citations[0].page_end)}
+                            {console.log('📖 Has chapter?', message.citations[0].chapter)}
+                            {console.log('=')}
+                            <CitationCard citations={message.citations} />
+                          </>
                         )}
 
                         {/* References */}
@@ -597,7 +617,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                 <div className="md:hidden flex items-center gap-2 mt-3">
                   <button
                     onClick={handleCopy}
-                    title={copied ? "Copied!" : "Copy"}
+                    title={copied ? t("copied") : t("copy")}
                     style={{
                       padding: "6px",
                       borderRadius: "6px",
@@ -617,10 +637,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onCopy }) => {
                     onClick={() => handleSpeakToggle(message.content)}
                     title={
                       ttsState.isLoading
-                        ? "Loading"
+                        ? t("loading")
                         : ttsState.isSpeaking
-                        ? "Stop"
-                        : "Read"
+                        ? t("stop.speaking")
+                        : t("speak")
                     }
                     disabled={!ttsState.isEnabled || ttsState.isLoading}
                     style={{

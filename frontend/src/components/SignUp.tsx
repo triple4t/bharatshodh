@@ -15,6 +15,7 @@ import {
   Languages,
   Globe,
 } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 import Logo from "../asset/img/bharat5.png";
 import ThemeCustomizer from "./ThemeCustomizer";
 
@@ -134,6 +135,7 @@ export default function SignUp() {
   const [err, setErr] = useState<string | null>(null);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const { t } = useLanguage();
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -247,7 +249,7 @@ export default function SignUp() {
               textShadow: "0 4px 20px rgba(0,0,0,0.3)",
             }}
           >
-            Join BharatShodh!
+            {t("auth.join")}
           </h1>
           <p
             style={{
@@ -366,7 +368,7 @@ export default function SignUp() {
                 backgroundClip: "text",
               }}
             >
-              Start with BharatShodh
+              {t("auth.start")}
             </h1>
             <p
               style={{

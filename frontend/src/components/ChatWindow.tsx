@@ -3,6 +3,7 @@ import ChatBubble from "./ChatBubble";
 import { Message } from "../types";
 import { enhanceMessagesWithSources } from "../utils/messageEnhancer";
 import { Sparkles, Bot } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 interface ChatWindowProps {
   messages: Message[];
@@ -17,6 +18,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onSpeak,
   onStopSpeaking,
 }) => {
+  const { t } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const enhancedMessages = enhanceMessagesWithSources(messages).filter(
@@ -30,7 +32,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-y-auto overflow-x-hidden">
-        <div className="text-center max-w-lg mx-auto mt-4 md:mt-32 lg:mt-32">
+        <div className="text-center max-w-lg mx-auto">
           {/* AI Avatar */}
           <div
             style={{
@@ -96,7 +98,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               }}
               className="md:text-[28px] md:mb-[12px]"
             >
-              How can I help you today?
+              {t("welcome.title")}
             </h2>
             <p
               style={{
@@ -107,8 +109,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               }}
               className="md:text-[16px]"
             >
-              I'm here to assist you with questions, creative tasks, analysis,
-              and more. Start a conversation below!
+              {t("welcome.desc")}
             </p>
           </div>
 
@@ -123,26 +124,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }}
             className="md:grid-cols-2 md:gap-[12px]"
           >
-            {[
+             {[
               {
                 icon: "💡",
-                title: "Get Ideas",
-                desc: "Brainstorm creative solutions",
+                title: t("suggest.ideas.title"),
+                desc: t("suggest.ideas.desc"),
               },
               {
                 icon: "📊",
-                title: "Analyze Data",
-                desc: "Review and interpret information",
+                title: t("suggest.analyze.title"),
+                desc: t("suggest.analyze.desc"),
               },
               {
                 icon: "✍️",
-                title: "Write Content",
-                desc: "Create articles, emails, and more",
+                title: t("suggest.write.title"),
+                desc: t("suggest.write.desc"),
               },
               {
                 icon: "🔍",
-                title: "Research Topics",
-                desc: "Find and summarize information",
+                title: t("suggest.research.title"),
+                desc: t("suggest.research.desc"),
               },
             ].map((suggestion, index) => (
               <div

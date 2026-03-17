@@ -23,7 +23,7 @@
 //     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 //       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 //       recognitionRef.current = new SpeechRecognition();
-      
+
 //       recognitionRef.current.continuous = true;
 //       recognitionRef.current.interimResults = true;
 //       recognitionRef.current.lang = 'en-US';
@@ -82,12 +82,12 @@
 //   const speak = (text: string) => {
 //     if (synthRef.current && ttsState.isSupported && ttsState.isEnabled) {
 //       synthRef.current.cancel();
-      
+
 //       const utterance = new SpeechSynthesisUtterance(text);
 //        // Get available voices
 //     const voices = synthRef.current.getVoices();
 
-   
+
 // const naturalVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural'));
 
 // if (naturalVoice) {
@@ -100,7 +100,7 @@
 //       utterance.onstart = () => setTTSState(prev => ({ ...prev, isSpeaking: true }));
 //       utterance.onend = () => setTTSState(prev => ({ ...prev, isSpeaking: false }));
 //       utterance.onerror = () => setTTSState(prev => ({ ...prev, isSpeaking: false }));
-      
+
 //       synthRef.current.speak(utterance);
 //     }
 //   };
@@ -408,64 +408,68 @@ export const useVoice = () => {
   // };
 
   const speak = async (text: string) => {
-  if (!ttsState.isEnabled || !text.trim()) return;
+    if (!ttsState.isEnabled || !text.trim()) return;
 
-  try {
-    setTTSState((prev) => ({
-      ...prev,
-      isSpeaking: false,
-      isLoading: true,
-    }));
+    try {
+      setTTSState((prev) => ({
+        ...prev,
+        isSpeaking: false,
+        isLoading: true,
+      }));
 
-    // stop previous audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
+      // stop previous audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+
+      const blob = await apiService.getSpeechAudio(text);
+
+      if (blob.size === 0) throw new Error("Empty audio blob");
+
+      // Explicitly fallback to audio/wav if type is missing or generic
+      const type = blob.type || 'audio/wav';
+      const audioBlob = blob.type ? blob : new Blob([blob], { type });
+
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setTTSState((prev) => ({
+          ...prev,
+          isSpeaking: false,
+          isLoading: false,
+        }));
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setTTSState((prev) => ({
+          ...prev,
+          isSpeaking: false,
+          isLoading: false,
+        }));
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      await audio.play();
+
+      setTTSState((prev) => ({
+        ...prev,
+        isSpeaking: true,
+        isLoading: false,
+      }));
+    } catch (err) {
+      console.error("TTS playback failed:", err);
+      setTTSState((prev) => ({
+        ...prev,
+        isSpeaking: false,
+        isLoading: false,
+      }));
     }
-
-    const blob = await apiService.getSpeechAudio(text);
-
-    if (blob.size === 0) throw new Error("Empty audio blob");
-
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => {
-      setTTSState((prev) => ({
-        ...prev,
-        isSpeaking: false,
-        isLoading: false,
-      }));
-      URL.revokeObjectURL(audioUrl);
-    };
-
-    audio.onerror = () => {
-      setTTSState((prev) => ({
-        ...prev,
-        isSpeaking: false,
-        isLoading: false,
-      }));
-      URL.revokeObjectURL(audioUrl);
-    };
-
-    await audio.play();
-
-    setTTSState((prev) => ({
-      ...prev,
-      isSpeaking: true,
-      isLoading: false,
-    }));
-  } catch (err) {
-    console.error("TTS playback failed:", err);
-    setTTSState((prev) => ({
-      ...prev,
-      isSpeaking: false,
-      isLoading: false,
-    }));
-  }
-};
+  };
 
   /**
    * ---------------------------
@@ -481,18 +485,18 @@ export const useVoice = () => {
   //   setTTSState((prev) => ({ ...prev, isSpeaking: false }));
   // };
   const stopSpeaking = () => {
-  if (audioRef.current) {
-    audioRef.current.pause();
-    audioRef.current.src = "";
-    audioRef.current = null;
-  }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
 
-  setTTSState((prev) => ({
-    ...prev,
-    isSpeaking: false,
-    isLoading: false,
-  }));
-};
+    setTTSState((prev) => ({
+      ...prev,
+      isSpeaking: false,
+      isLoading: false,
+    }));
+  };
 
   /**
    * ---------------------------

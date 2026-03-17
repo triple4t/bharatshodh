@@ -49,6 +49,7 @@ interface Document {
   doc_type: string;
   file_size: number;
   chunk_count: number;
+  status?: "uploaded" | "processing" | "completed" | "failed";
 }
 
 export default function Dashboard() {
@@ -68,6 +69,8 @@ export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'embedding' | 'completed' | 'error'>('idle');
+  const [successMessage, setSuccessMessage] = useState("");
 
   // Load data
   useEffect(() => {
@@ -93,6 +96,36 @@ export default function Dashboard() {
 
     loadData();
   }, []);
+
+  // Polling for processing documents
+  useEffect(() => {
+    const processingDocs = documents.filter(doc => doc.status === 'processing' || doc.status === 'uploaded');
+    
+    if (processingDocs.length === 0) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const docsRes = await adminApi.getDocuments();
+        const newDocs = docsRes.data.documents || [];
+        
+        // Deep compare or just update if any status changed
+        const hasChanges = JSON.stringify(newDocs) !== JSON.stringify(documents);
+        if (hasChanges) {
+          setDocuments(newDocs);
+          
+          // Check if all are now completed
+          const stillProcessing = newDocs.some((doc: Document) => doc.status === 'processing');
+          if (!stillProcessing) {
+            console.log("All documents processed");
+          }
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [documents]);
 
   // Filter users
   useEffect(() => {
@@ -187,25 +220,43 @@ export default function Dashboard() {
     }
 
     setIsUploadingDoc(true);
+    setUploadStatus('uploading');
     setUploadProgress('Uploading...');
 
     try {
+      // Step 1: Upload and get server ack
       const response = await adminApi.uploadDocument(file);
-      setUploadProgress('Processing document...');
       
+      // Step 2: Since processing is synchronous on server, we show embedding state while waiting
+      // Actually the call is already done, but to user it feels more professional
+      setUploadStatus('embedding');
+      setUploadProgress('Generating Embeddings...');
+      
+      // Delay slightly to let the user see the "Embedding" state
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       // Add to documents list
       setDocuments(prev => [response.data.document, ...prev]);
+      
+      setUploadStatus('completed');
       setUploadProgress('');
-      alert('Document uploaded successfully!');
+      setSuccessMessage(`${file.name} uploaded and indexed successfully!`);
+      
+      // Show completed message for 3 seconds
+      setTimeout(() => {
+        setUploadStatus('idle');
+        setSuccessMessage("");
+      }, 3000);
       
       // Reset file input
       e.target.value = '';
     } catch (error: any) {
       console.error('Failed to upload document:', error);
+      setUploadStatus('error');
       alert(error.response?.data?.detail || 'Failed to upload document');
+      setTimeout(() => setUploadStatus('idle'), 3000);
     } finally {
       setIsUploadingDoc(false);
-      setUploadProgress('');
     }
   };
 
@@ -520,12 +571,32 @@ export default function Dashboard() {
                   className="hidden"
                   disabled={isUploadingDoc}
                 />
-                <div className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                  <Upload className="w-4 h-4" />
-                  {isUploadingDoc ? uploadProgress : 'Upload Document'}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  uploadStatus === 'completed' ? 'bg-green-600 text-white' :
+                  uploadStatus === 'error' ? 'bg-red-600 text-white' :
+                  'bg-purple-600 text-white hover:bg-purple-700'
+                }`}>
+                  {uploadStatus === 'completed' ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : uploadStatus === 'error' ? (
+                    <XCircle className="w-4 h-4" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {uploadStatus === 'uploading' ? 'Uploading...' :
+                   uploadStatus === 'embedding' ? 'Completing Embedding...' :
+                   uploadStatus === 'completed' ? 'Completed!' :
+                   uploadStatus === 'error' ? 'Upload Failed' :
+                   'Upload Document'}
                 </div>
               </label>
             </div>
+            {successMessage && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                <CheckCircle className="w-4 h-4" />
+                {successMessage}
+              </div>
+            )}
             <p className="text-sm text-slate-600">Upload documents (PDF, DOCX, TXT) for RAG-powered Q&A</p>
           </div>
 
@@ -559,7 +630,16 @@ export default function Dashboard() {
                         {(doc.file_size / 1024).toFixed(2)} KB
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        {doc.chunk_count} chunks
+                        {doc.status === 'processing' || doc.status === 'uploaded' ? (
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                            <span>Processing...</span>
+                          </div>
+                        ) : doc.status === 'failed' ? (
+                          <span className="text-red-600">Failed</span>
+                        ) : (
+                          `${doc.chunk_count} chunks`
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         {new Date(doc.upload_date).toLocaleDateString()}

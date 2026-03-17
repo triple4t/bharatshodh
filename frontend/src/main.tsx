@@ -1,6 +1,7 @@
-import { ThemeProvider } from "./context/ThemeContext";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ThemeProvider } from "./context/ThemeContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import App from "./App";
 import "./index.css";
 
@@ -23,8 +24,10 @@ if (savedTheme) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </LanguageProvider>
   </StrictMode>
 );

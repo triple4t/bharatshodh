@@ -17,6 +17,8 @@ import {
   parseWebSourcesFromContent,
 } from "../utils/messageEnhancer";
 import { useThemeMode } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import LanguageToggle from "./LanguageToggle";
 import { CheckCircle, AlertCircle } from "lucide-react";
 
 function ChatApp() {
@@ -29,6 +31,7 @@ function ChatApp() {
   } | null>(null);
   const { speak, stopSpeaking, ttsState } = useVoice();
   const { setMode, resolvedMode } = useThemeMode();
+  const { t } = useLanguage();
 
   // Load chat history on mount
   useEffect(() => {
@@ -54,7 +57,7 @@ function ChatApp() {
         }
       } catch (error) {
         console.error("Failed to load chats:", error);
-        showNotification("Failed to load chat history", "error");
+        showNotification(t("failed.send"), "error");
       }
     };
 
@@ -111,10 +114,10 @@ function ChatApp() {
 
         setChats((prev) => [newChat, ...prev]);
         setCurrentChatId(newChat.id);
-        showNotification("New chat created", "success");
+        showNotification(t("new.chat.created"), "success");
       } catch (error) {
         console.error("Failed to create new chat:", error);
-        showNotification("Failed to create new chat", "error");
+        showNotification(t("failed.send"), "error");
       }
     };
 
@@ -140,10 +143,10 @@ function ChatApp() {
               remainingChats.length > 0 ? remainingChats[0].id : null
             );
           }
-          showNotification("Chat deleted", "success");
+          showNotification(t("chat.deleted"), "success");
         } catch (error) {
           console.error("Failed to delete chat:", error);
-          showNotification("Failed to delete chat", "error");
+          showNotification(t("failed.send"), "error");
         }
       };
 
@@ -167,10 +170,10 @@ function ChatApp() {
               : chat
           )
         );
-        showNotification("Chat renamed", "success");
+        showNotification(t("chat.renamed"), "success");
       } catch (error) {
         console.error("Failed to rename chat:", error);
-        showNotification("Failed to rename chat", "error");
+        showNotification(t("failed.send"), "error");
       }
     };
 
@@ -265,7 +268,7 @@ function ChatApp() {
           } catch (err) {
             console.warn("Web search failed, continuing with LLM only:", err);
             showNotification(
-              "Web search unavailable, using AI knowledge",
+              t("failed.search"),
               "info"
             );
           }
@@ -284,6 +287,14 @@ function ChatApp() {
           );
         }
 
+        // DEBUG: Log raw API response
+        console.log('='.repeat(80));
+        console.log('🔍 RAW API RESPONSE:');
+        console.log('response object:', response);
+        console.log('response.response:', response.response);
+        console.log('response.response.citations:', response.response.citations);
+        console.log('='.repeat(80));
+
         let sources: WebSearchResult[] | undefined = undefined;
         if (formattedResults) {
           sources = parseWebSourcesFromContent(formattedResults);
@@ -296,7 +307,13 @@ function ChatApp() {
           timestamp: new Date(response.response.timestamp),
           ...(sources && { sources }),
           references: response.response.references,
+          citations: response.response.citations,  // NEW: Include RAG citations
         };
+        
+        // DEBUG: Log if citations are present
+        if (response.response.citations) {
+          console.log('✅ ChatApp: Received citations from API:', response.response.citations);
+        }
 
         setChats((prev) =>
           prev.map((chat) => {
@@ -317,7 +334,7 @@ function ChatApp() {
         );
       } catch (error) {
         console.error("Failed to send message:", error);
-        showNotification("Failed to send message. Please try again.", "error");
+        showNotification(t("failed.send"), "error");
 
         setChats((prev) =>
           prev.map((chat) => {
@@ -328,8 +345,7 @@ function ChatApp() {
               const errorMessage: Message = {
                 id: uuidv4(),
                 role: "assistant",
-                content:
-                  "Sorry, I encountered an error while processing your message. Please try again.",
+                content: t("error.processing"),
                 timestamp: new Date(),
               };
 
@@ -425,6 +441,9 @@ function ChatApp() {
           )}
         </button>
 
+        {/* Language Toggle */}
+        <LanguageToggle />
+
         {/* Header */}
         <Header
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
@@ -468,7 +487,7 @@ function ChatApp() {
           {/* Input Box */}
           <InputBox
             onSendMessage={handleSendMessage}
-            placeholder="Ask me anything..."
+            placeholder={t("ask.anything")}
           />
         </div>
       </div>

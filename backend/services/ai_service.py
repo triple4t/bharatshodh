@@ -25,8 +25,8 @@ class AIService:
             api_key=settings.azure_openai_api_key,
             api_version=settings.azure_openai_api_version,
             deployment_name=settings.azure_openai_deployment_name,
-            temperature=0.7,
-            max_tokens=2000,
+            temperature=1,
+            max_completion_tokens=2000,
         )
 
         # Initialize semantic cache (lazy initialization)
@@ -74,7 +74,7 @@ SAFETY:
 Always be helpful, accurate, and maintain context from previous messages in the conversation.
 Use markdown formatting when appropriate for better readability."""
 
-    async def generate_response(self, messages: List[Message], image_path: Optional[str] = None) -> str:
+    async def generate_response(self, messages: List[Message], image_path: Optional[str] = None, rag_context: Optional[str] = None) -> str:
         """Generate AI response based on conversation history"""
         try:
             # Extract the latest user query for caching
@@ -89,7 +89,27 @@ Use markdown formatting when appropriate for better readability."""
                     return cached_response
 
             # Convert messages to LangChain format
-            langchain_messages = [SystemMessage(content=self.system_prompt)]
+            langchain_messages = []
+            
+            # Add system prompt
+            langchain_messages.append(SystemMessage(content=self.system_prompt))
+            
+            # CRITICAL: If RAG context provided, add BEFORE conversation history
+            if rag_context:
+                rag_system_msg = f"""<<CRITICAL_DOCUMENT_MODE>>
+YOU ARE NOW IN STRICT DOCUMENT QA MODE.
+
+The following documents contain ALL the information needed to answer the user's question:
+
+{rag_context}
+
+MANDATORY RULES:
+- Extract your answer ONLY from the documents above
+- Cite sources as [1], [2], [3] after each fact
+- DO NOT use your general knowledge for this question
+- If the answer is not in the documents, say "This information is not found in the uploaded documents"
+<</CRITICAL_DOCUMENT_MODE>>"""
+                langchain_messages.append(SystemMessage(content=rag_system_msg))
 
             for msg in messages:
                 if msg.role == MessageRole.USER:

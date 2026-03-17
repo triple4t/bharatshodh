@@ -1,7 +1,7 @@
 """
 Admin authentication and management router
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import uuid
 import shutil
@@ -86,7 +86,7 @@ async def register_admin(payload: AdminRegister):
         "username": payload.username.lower().strip(),
         "email": payload.email.lower().strip(),
         "password_hash": hash_password(payload.password),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "is_super_admin": is_first_admin,  # First admin is super admin
         "is_active": True,
     }
@@ -249,7 +249,7 @@ async def approve_user(user_id: str, authorization: str = Header(None, alias="Au
     # Update user status
     await db.users.update_one(
         {"_id": user_id},
-        {"$set": {"status": "approved", "approved_at": datetime.utcnow()}}
+        {"$set": {"status": "approved", "approved_at": datetime.now(timezone.utc)}}
     )
     
     # Send approval email
@@ -288,7 +288,7 @@ async def reject_user(
         {
             "$set": {
                 "status": "rejected",
-                "rejected_at": datetime.utcnow(),
+                "rejected_at": datetime.now(timezone.utc),
                 "rejection_reason": reason or "Account does not meet requirements"
             }
         }
@@ -406,7 +406,7 @@ async def upload_admin_document(
     file: UploadFile = File(...),
     authorization: str = Header(None, alias="Authorization")
 ):
-    """Upload a document as admin (accessible to all users)"""
+    """Upload a document as admin (now supports large files via streaming)"""
     admin_id = await get_current_admin(authorization)
     
     try:
@@ -419,35 +419,47 @@ async def upload_admin_document(
                 detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
             )
 
-        # Validate file size (25MB max)
-        max_size = getattr(settings, "max_file_size", 25 * 1024 * 1024)
-        file_size = getattr(file, "size", None)
-        if file_size and file_size > max_size:
-            raise HTTPException(status_code=413, detail="File too large (max 25MB)")
-
-        # Save file temporarily
-        upload_dir = getattr(settings, "upload_dir", "uploads")
-        temp_id = str(uuid.uuid4())
-        temp_path = os.path.join(upload_dir, f"temp_{temp_id}{file_ext}")
+        # NO FILE SIZE LIMIT - streaming handles large files!
         
-        with open(temp_path, "wb") as buffer:
+        # Generate document ID
+        doc_id = str(uuid.uuid4())
+        
+        # Save uploaded file (stream to disk, memory-safe regardless of size)
+        upload_dir = getattr(settings, "upload_dir", "uploads")
+        doc_dir = os.path.join(upload_dir, "documents")
+        os.makedirs(doc_dir, exist_ok=True)
+        file_path = os.path.join(doc_dir, f"{doc_id}_{file.filename}")
+        
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-
-        # Upload and process document
-        doc_info = await document_service.upload_document(
-            file_path=temp_path,
-            filename=file.filename,
+        
+        file_size = os.path.getsize(file_path)
+        
+        # Import background processor
+        from services.document_processor import background_processor
+        from models import DocumentStatus
+        
+        # Start background processing (non-blocking for large files!)
+        background_processor.start_processing(
+            doc_id=doc_id,
+            file_path=file_path,
             uploaded_by=admin_id,
-            doc_type="admin"
+            doc_type="admin",
+            filename=file.filename
         )
 
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
         return DocumentUploadResponse(
-            message="Admin document uploaded successfully",
-            document=DocumentInfo(**doc_info)
+            message=f"Processing started for {file.filename} (admin document)",
+            document=DocumentInfo(
+                id=doc_id,
+                filename=file.filename,
+                upload_date=datetime.now(timezone.utc),
+                uploaded_by=admin_id,
+                doc_type="admin",
+                file_size=file_size,
+                chunk_count=0,
+                status=DocumentStatus.PROCESSING
+            )
         )
 
     except HTTPException:
@@ -455,6 +467,8 @@ async def upload_admin_document(
     except Exception as e:
         import logging
         logging.error(f"Error uploading admin document: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
 
 

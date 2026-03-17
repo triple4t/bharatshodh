@@ -14,6 +14,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 import Logo from "../asset/img/bharat5.png";
 import ThemeCustomizer from "./ThemeCustomizer";
 
@@ -130,6 +131,7 @@ export default function SignIn() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const { t } = useLanguage();
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +221,7 @@ export default function SignIn() {
               textShadow: "0 4px 20px rgba(0,0,0,0.3)",
             }}
           >
-            Welcome to BharatShodh
+            {t("auth.welcome")}
           </h1>
           <p
             style={{
@@ -347,7 +349,7 @@ export default function SignIn() {
                 backgroundClip: "text",
               }}
             >
-              Sign In
+              {t("auth.signin")}
             </h1>
             <p
               style={{
@@ -437,7 +439,6 @@ export default function SignIn() {
                         background:
                           "color-mix(in srgb, var(--theme-iconColor) 10%, transparent)",
                         border: "1px solid var(--theme-iconColor)",
-                        borderRadius: "12px",
                       }}
                     >
                       <div

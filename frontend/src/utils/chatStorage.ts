@@ -25,6 +25,7 @@ const convertApiMessageToLocal = (apiMessage: ApiMessage) => ({
   file: apiMessage.file, // ✅ Preserve file object
   fileName: apiMessage.file?.filename,
   fileType: apiMessage.file?.type,
+  citations: apiMessage.citations, // ✅ NEW: Preserve citations!
 });
 export const getChatHistory = async (): Promise<Chat[]> => {
   try {

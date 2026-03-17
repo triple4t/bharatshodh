@@ -21,11 +21,13 @@ from database import connect_to_mongo, close_mongo_connection
 from models import (
     Chat, ChatCreate, ChatRename, ChatResponse, ChatListResponse,
     ChatHistoryResponse, FileInfo, MessageCreate, SearchQuery, TTSRequest,
-    DocumentInfo, DocumentUploadResponse, Citation, Message
+    DocumentInfo, DocumentUploadResponse, Citation, Message,
+    DocumentStatus, DocumentProgress  # NEW: Streaming ingestion models
 )
-from services.chat_service import chat_service #generate_wave_bytes, stream_bytes_in_chunks, wav_to_mp3_stream
+from services.chat_service import chat_service
 from services.file_processor import file_processor
 from services.document_service import document_service
+from services.document_processor import background_processor  # NEW: Background processor
 from security import get_current_user
 from auth_router import router as auth_router
 from admin_router import router as admin_router
@@ -194,24 +196,33 @@ async def send_message(chat_id: str, message_data: MessageCreate, current=Depend
             else:
                 logger.info("No relevant documents found for RAG query")
 
-        # Combine RAG context with message content if available
-        content_for_ai = message_data.content
-        if rag_context:
-            content_for_ai = f"{rag_context}\n\nUser Question: {message_data.content}\n\nPlease answer based on the documents provided above."
-
+        # Pass RAG context as system message for stronger enforcement
+        if rag_context and citations:
+            logger.info(f"🔍 RAG CONTEXT ENABLED - passing as system message")
+            logger.info(f"📏 RAG context length: {len(rag_context)} chars")
+            logger.info(f"📄 Number of citations: {len(citations)}")
+        
         user_msg, ai_msg = await chat_service.process_message(
             owner_id=current["_id"],
             chat_id=chat_id,
-            content=content_for_ai,
+            content=message_data.content,
             original_content=message_data.original_content or message_data.content,
             web_search_results=message_data.web_search_results,
-            image_path=None
+            image_path=None,
+            rag_context=rag_context,
+            citations=citations  # NEW: Pass citations to be persisted
         )
 
-        # Convert ai_msg to dict and add citations
+        # Citations are now already in ai_msg from database, no need to add manually
         ai_msg_dict = ai_msg.model_dump() if hasattr(ai_msg, 'model_dump') else dict(ai_msg)
         if citations:
-            ai_msg_dict["citations"] = citations
+            # DEBUG: Print detailed citation info
+            logger.info("="*80)
+            logger.info(f"🔍 CITATIONS PERSISTED IN DATABASE ({len(citations)} citations)")
+            logger.info(f"📋 First citation full structure:")
+            import json
+            logger.info(json.dumps(citations[0], indent=2, default=str))
+            logger.info("="*80)
 
         # Convert user_msg to dict as well for consistency
         user_msg_dict = user_msg.model_dump() if hasattr(user_msg, 'model_dump') else dict(user_msg)
@@ -319,19 +330,29 @@ async def upload_file(
 @app.post("/api/tts")
 async def generate_speech(data: TTSRequest):
     try:
-        audio_bytes = chat_service.azure_tts_audio_bytes(data)
+        # Use provider-agnostic generator (Azure or Sarvam based on config)
+        audio_bytes = chat_service.generate_tts_audio(data)
 
         if not audio_bytes:
-            raise RuntimeError("Azure TTS returned empty audio")
+            raise RuntimeError("TTS service returned empty audio")
+
+        # Determine media type based on provider
+        # Azure returns MP3, Sarvam typically returns WAV
+        media_type = "audio/mpeg"
+        filename = "speech.mp3"
+        
+        if settings.tts_provider.lower() == "sarvam":
+            media_type = "audio/wav"
+            filename = "speech.wav"
 
         return Response(
             content=audio_bytes,
-            media_type="audio/mpeg",
+            media_type=media_type,
             headers={
                 "Content-Length": str(len(audio_bytes)),
                 "Accept-Ranges": "bytes",
                 "Cache-Control": "no-store",
-                "Content-Disposition": 'inline; filename="speech.mp3"',
+                "Content-Disposition": f'inline; filename="{filename}"',
             },
         )
 
@@ -474,3 +495,97 @@ async def delete_user_document(doc_id: str, current=Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error deleting document: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
+
+
+# ---------- ENTERPRISE STREAMING DOCUMENT INGESTION ----------
+
+@app.post("/api/documents/upload-async", response_model=DocumentUploadResponse)
+async def upload_document_async(
+    file: UploadFile = File(...),
+    doc_type: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Async document upload with background processing (handles 300MB+ PDFs).
+    
+    Returns immediately. Poll /api/documents/{doc_id}/status for progress.
+    """
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith(('.pdf', '.txt')):
+            raise HTTPException(status_code=400, detail="Only PDF and TXT files supported")
+        
+        # Generate document ID
+        doc_id = str(uuid.uuid4())
+        
+        # Save uploaded file (stream to disk, memory-safe)
+        doc_dir = os.path.join(settings.upload_dir, "documents")
+        os.makedirs(doc_dir, exist_ok=True)
+        file_path = os.path.join(doc_dir, f"{doc_id}_{file.filename}")
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        file_size = os.path.getsize(file_path)
+        logger.info(f"📁 Saved {file.filename} ({file_size / 1024 / 1024:.2f} MB)")
+        
+        # Start background processing (non-blocking!)
+        background_processor.start_processing(
+            doc_id=doc_id,
+            file_path=file_path,
+            uploaded_by=current_user["id"],
+            doc_type=doc_type,
+            filename=file.filename
+        )
+        
+        return DocumentUploadResponse(
+            message=f"Processing started for {file.filename}",
+            document=DocumentInfo(
+                id=doc_id,
+                filename=file.filename,
+                upload_date=datetime.utcnow(),
+                uploaded_by=current_user["id"],
+                doc_type=doc_type,
+                file_size=file_size,
+                chunk_count=0,
+                status=DocumentStatus.PROCESSING
+            )
+        )
+        
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/documents/{doc_id}/status")
+async def get_document_status(doc_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Get processing status for a document.
+    """
+    from database import get_database
+    db = get_database()
+    
+    progress = await db.document_progress.find_one({"doc_id": doc_id})
+    
+    if not progress:
+        # Check if document exists (legacy upload)
+        doc = await db.documents.find_one({"_id": doc_id})
+        if doc:
+            return {
+                "doc_id": doc_id,
+                "status": doc.get("status", DocumentStatus.COMPLETED),
+                "chunks_created": doc.get("chunk_count", 0),
+                "message": "Document processed"
+            }
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Return progress
+    return {
+        "doc_id": progress["doc_id"],
+        "status": progress["status"],
+        "total_pages": progress.get("total_pages"),
+        "pages_processed": progress.get("pages_processed", 0),
+        "chunks_created": progress.get("chunks_created", 0),
+        "error_message": progress.get("error_message"),
+        "progress_percentage": int((progress.get("pages_processed", 0) / progress.get("total_pages", 1)) * 100) if progress.get("total_pages") else 0
+    }

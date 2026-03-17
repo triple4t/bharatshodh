@@ -1,16 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from fastapi import APIRouter, HTTPException, Depends,BackgroundTasks
 from models import UserCreate, UserLogin, UserPublic, TokenResponse, ForgotPasswordRequest, ResetPasswordRequest, UserApprovalRequest, ApprovalResponse
 from services.emailer import send_reset_email, send_approval_email, send_rejection_email
 from database import get_database
-from security import hash_password, verify_password, create_access_token, get_current_user,hash_value, generate_reset_token
+from security import hash_password, verify_password, create_access_token, get_current_user, hash_value, generate_reset_token
+from config import settings
 import uuid
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-FRONTEND_RESET_URL = os.getenv("FRONTEND_RESET_URL", "http://localhost:5173/reset-password")
-FRONTEND_LOGIN_URL = os.getenv("FRONTEND_LOGIN_URL", "http://localhost:5173/signin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # Change in production
 
 @router.post("/register", response_model=UserPublic)
@@ -26,7 +25,7 @@ async def register(payload: UserCreate):
         "email": payload.email.lower().strip(),
         "name": payload.name,
         "password_hash": hash_password(payload.password),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "status": "pending",  # New users start as pending
         "approved_at": None,
     }
@@ -89,17 +88,17 @@ async def forgot_password(payload: ForgotPasswordRequest, background_tasks: Back
     )
 
     # build link (frontend will handle token param)
-    reset_link = f"{FRONTEND_RESET_URL}?token={token}&email={email}"
+    reset_link = f"{settings.frontend_reset_url}?token={token}&email={email}"
 
-    # send via Brevo in background
-    background_tasks.add_task(send_reset_email, email, reset_link, os.getenv("APP_NAME", "MyApp"))
+    # send via SMTP in background
+    background_tasks.add_task(send_reset_email, email, reset_link, settings.app_name)
     return {"msg": "If that email exists, you will receive a reset link."}
 
 
 @router.post("/reset-password")
 async def reset_password(payload: ResetPasswordRequest):
     db = get_database()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     token_hash = hash_value(payload.token)
 
     user = await db.users.find_one({
@@ -126,7 +125,7 @@ async def reset_password(payload: ResetPasswordRequest):
 
 # ---------- ADMIN APPROVAL ENDPOINTS ----------
 
-@router.get("/api/admin/pending-users")
+@router.get("/admin/pending-users")
 async def get_pending_users(admin_token: str):
     """
     Get list of pending users waiting for approval.
@@ -149,7 +148,7 @@ async def get_pending_users(admin_token: str):
     return {"pending_users": users}
 
 
-@router.post("/api/admin/approve-user", response_model=ApprovalResponse)
+@router.post("/admin/approve-user", response_model=ApprovalResponse)
 async def approve_user(payload: UserApprovalRequest, background_tasks: BackgroundTasks, admin_token: str):
     """
     Approve a pending user and send approval email.
@@ -176,12 +175,12 @@ async def approve_user(payload: UserApprovalRequest, background_tasks: Backgroun
     )
 
     # Send approval email in background
-    login_link = FRONTEND_LOGIN_URL
+    login_link = settings.frontend_login_url
     background_tasks.add_task(
         send_approval_email,
         user["email"],
         login_link,
-        os.getenv("APP_NAME", "MyApp")
+        settings.app_name
     )
 
     return ApprovalResponse(
@@ -191,7 +190,7 @@ async def approve_user(payload: UserApprovalRequest, background_tasks: Backgroun
     )
 
 
-@router.post("/api/admin/reject-user", response_model=ApprovalResponse)
+@router.post("/admin/reject-user", response_model=ApprovalResponse)
 async def reject_user(payload: UserApprovalRequest, background_tasks: BackgroundTasks, admin_token: str):
     """
     Reject a pending user and send rejection email.
@@ -222,7 +221,7 @@ async def reject_user(payload: UserApprovalRequest, background_tasks: Background
         send_rejection_email,
         user["email"],
         payload.reason,
-        os.getenv("APP_NAME", "MyApp")
+        settings.app_name
     )
 
     return ApprovalResponse(

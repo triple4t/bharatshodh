@@ -22,6 +22,7 @@ export interface ApiMessage {
   };
   timestamp: string;
   references?: Reference[];
+  citations?: Citation[];  // NEW: RAG citations from backend
 }
 
 export interface ApiChat {
