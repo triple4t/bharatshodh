@@ -68,7 +68,7 @@ export default function Dashboard() {
   // Document management state
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
+  const [, setUploadProgress] = useState("");
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'embedding' | 'completed' | 'error'>('idle');
   const [successMessage, setSuccessMessage] = useState("");
 
